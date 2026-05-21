@@ -1,134 +1,134 @@
 # Solmar BMS ESP-NOW
 
-Monorepo for the Solmar battery telemetry firmware.
+Repositório único dos firmwares de telemetria da bateria do projeto Solmar.
 
-It contains two independent PlatformIO firmwares plus one shared protocol
-header:
+O repositório contém dois firmwares PlatformIO independentes e um cabeçalho de
+protocolo compartilhado:
 
-- `firmware/gateway`: reads Felicity/Felicity ESS BMS data over RS485 Modbus
-  and broadcasts the main battery data over ESP-NOW.
-- `firmware/receiver-lcd`: receives the ESP-NOW battery packet on a second
-  ESP32-C3 and shows the main values on a 16x2 I2C LCD.
-- `shared`: common ESP-NOW packet format used by both firmwares.
+- `firmware/gateway`: lê os dados do BMS Felicity/Felicity ESS via RS485 Modbus
+  e transmite os dados principais da bateria por ESP-NOW.
+- `firmware/receiver-lcd`: recebe o pacote ESP-NOW em um segundo ESP32-C3 e
+  mostra os principais valores em um LCD 16x2 I2C.
+- `shared`: formato comum do pacote ESP-NOW usado pelos dois firmwares.
 
-The active firmware does not publish data through MQTT and does not connect to
-a WiFi network. ESP-NOW still uses the ESP32 radio internally, but it does not
-need a router, SSID, password or MQTT broker.
+O firmware ativo não publica dados por MQTT e não conecta em uma rede WiFi.
+O ESP-NOW usa internamente o rádio do ESP32, mas não precisa de roteador, SSID,
+senha ou broker MQTT.
 
-Keeping the ESP-NOW packet in `shared/espnow_battery_packet.h` avoids a common
-embedded bug: the sender and receiver silently drifting to different binary
-layouts.
+Manter o pacote ESP-NOW em `shared/espnow_battery_packet.h` evita um erro comum
+em projetos embarcados: transmissor e receptor evoluírem para formatos binários
+diferentes sem perceber.
 
-Possible future integrations are tracked in [TODO.md](TODO.md), including
-MQTT/WiFi publishing and LoRa.
+Possíveis integrações futuras ficam listadas em [TODO.md](TODO.md), incluindo
+publicação MQTT/WiFi e LoRa.
 
 ## Gateway
 
-The gateway is the board connected to the battery RS485 bus.
+O gateway é a placa conectada ao barramento RS485 da bateria.
 
-If the `pio` command is not available in your terminal, replace `pio` with the
-full PlatformIO path:
+Se o comando `pio` não estiver disponível no terminal, substitua `pio` pelo
+caminho completo do PlatformIO:
 
 ```sh
 C:\Users\pedro\.platformio\penv\Scripts\platformio.exe
 ```
 
-Before uploading, list the connected serial ports:
+Antes de fazer upload, liste as portas seriais conectadas:
 
 ```sh
 pio device list
 ```
 
-If only one ESP32 is connected, PlatformIO usually detects the port
-automatically. If more than one board is connected, pass the upload port
-explicitly with `--upload-port COMx`.
+Se apenas um ESP32 estiver conectado, o PlatformIO geralmente detecta a porta
+automaticamente. Se houver mais de uma placa conectada, informe a porta
+explicitamente com `--upload-port COMx`.
 
-Build the ESP32-C3 gateway without uploading:
+Compilar o gateway ESP32-C3 sem fazer upload:
 
 ```sh
 cd firmware/gateway
 pio run -e esp32-c3-gateway
 ```
 
-Upload the ESP32-C3 gateway:
+Fazer upload do gateway ESP32-C3:
 
 ```sh
 cd firmware/gateway
 pio run -e esp32-c3-gateway -t upload
 ```
 
-Upload it to a specific port:
+Fazer upload em uma porta específica:
 
 ```sh
 pio run -e esp32-c3-gateway -t upload --upload-port COM5
 ```
 
-Open the serial monitor for this gateway:
+Abrir o monitor serial do gateway:
 
 ```sh
 pio device monitor -b 9600
 ```
 
-Compile the ESP-NOW packet unit test:
+Compilar o teste unitário do pacote ESP-NOW:
 
 ```sh
 cd firmware/gateway
 pio test -e espnow-packet-test --without-uploading --without-testing
 ```
 
-## LCD Receiver
+## Receptor LCD
 
-The LCD receiver is the second ESP32-C3. It is not connected to RS485. It only
-receives ESP-NOW packets and updates the 16x2 I2C display.
+O receptor LCD é o segundo ESP32-C3. Ele não é conectado ao RS485. Ele apenas
+recebe pacotes ESP-NOW e atualiza o display LCD 16x2 I2C.
 
-Disconnect the gateway board or use `--upload-port COMx` so you do not upload
-the receiver firmware to the wrong board.
+Desconecte a placa do gateway ou use `--upload-port COMx` para evitar gravar o
+firmware do receptor na placa errada.
 
-Build the ESP32-C3 LCD receiver without uploading:
+Compilar o receptor LCD ESP32-C3 sem fazer upload:
 
 ```sh
 cd firmware/receiver-lcd
 pio run -e esp32-c3-lcd-receiver
 ```
 
-Upload the ESP32-C3 LCD receiver:
+Fazer upload do receptor LCD ESP32-C3:
 
 ```sh
 cd firmware/receiver-lcd
 pio run -e esp32-c3-lcd-receiver -t upload
 ```
 
-Upload it to a specific port:
+Fazer upload em uma porta específica:
 
 ```sh
 pio run -e esp32-c3-lcd-receiver -t upload --upload-port COM6
 ```
 
-Open the serial monitor for the LCD receiver:
+Abrir o monitor serial do receptor LCD:
 
 ```sh
 pio device monitor -b 115200
 ```
 
-## ESP-NOW Channel
+## Canal ESP-NOW
 
-The receiver and sender must use the same ESP-NOW channel.
+O receptor e o transmissor precisam usar o mesmo canal ESP-NOW.
 
-The gateway setting is `ESP_NOW_WIFI_CHANNEL` in
-`firmware/gateway/platformio.ini`. The receiver has the same setting in
-`firmware/receiver-lcd/platformio.ini`. The default value is channel `1` in
-both firmwares.
+A configuração do gateway é `ESP_NOW_WIFI_CHANNEL` em
+`firmware/gateway/platformio.ini`. O receptor tem a mesma configuração em
+`firmware/receiver-lcd/platformio.ini`. O valor padrão é o canal `1` nos dois
+firmwares.
 
-If you change the channel, change it in both firmwares:
+Se mudar o canal, altere nos dois firmwares:
 
 ```ini
 build_flags =
 	-D ESP_NOW_WIFI_CHANNEL=6
 ```
 
-If the LCD receiver keeps showing `Sem dados`, check these items first:
+Se o receptor LCD continuar mostrando `Sem dados`, confira primeiro:
 
-- the gateway is powered and reading the battery
-- both boards use the same ESP-NOW channel
-- the receiver was uploaded with the receiver firmware, not the gateway firmware
-- the LCD I2C address is correct (`0x27` or `0x3F` are common)
+- o gateway está ligado e lendo a bateria
+- as duas placas usam o mesmo canal ESP-NOW
+- o receptor recebeu o firmware do receptor, não o firmware do gateway
+- o endereço I2C do LCD está correto (`0x27` e `0x3F` são comuns)

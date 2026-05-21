@@ -1,48 +1,49 @@
-# Gateway Firmware
+# Firmware Gateway
 
-Reads Felicity/Felicity ESS BMS values over RS485 Modbus and broadcasts the
-main battery data over ESP-NOW.
+Lê os valores do BMS Felicity/Felicity ESS via RS485 Modbus e transmite os
+dados principais da bateria por ESP-NOW.
 
-This firmware intentionally does not publish through MQTT and does not connect
-to a WiFi network. ESP-NOW uses the ESP32 radio directly, without SSID,
-password, router or MQTT broker.
+Este firmware intencionalmente não publica por MQTT e não conecta em uma rede
+WiFi. O ESP-NOW usa o rádio do ESP32 diretamente, sem SSID, senha, roteador ou
+broker MQTT.
 
-Build the ESP32-C3 gateway:
+Compilar o gateway ESP32-C3:
 
 ```sh
 pio run -e esp32-c3-gateway
 ```
 
-Upload the ESP32-C3 gateway:
+Fazer upload do gateway ESP32-C3:
 
 ```sh
 pio run -e esp32-c3-gateway -t upload
 ```
 
-If more than one board is connected, list ports and choose one explicitly:
+Se mais de uma placa estiver conectada, liste as portas e escolha uma
+explicitamente:
 
 ```sh
 pio device list
 pio run -e esp32-c3-gateway -t upload --upload-port COM5
 ```
 
-Open the monitor:
+Abrir o monitor serial:
 
 ```sh
 pio device monitor -b 9600
 ```
 
-Compile the packet unit test:
+Compilar o teste unitário do pacote:
 
 ```sh
 pio test -e espnow-packet-test --without-uploading --without-testing
 ```
 
-Run the packet unit test on a connected ESP32-C3:
+Rodar o teste unitário em um ESP32-C3 conectado:
 
 ```sh
 pio test -e espnow-packet-test
 ```
 
-The binary ESP-NOW packet shared with the receiver lives in
+O pacote binário ESP-NOW compartilhado com o receptor fica em
 `../../shared/espnow_battery_packet.h`.
