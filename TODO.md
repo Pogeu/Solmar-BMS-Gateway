@@ -4,28 +4,28 @@ Project task list for the Solmar BMS ESP-NOW firmwares.
 
 ### Todo
 
-- [ ] Add optional MQTT/WiFi publishing ~2d #feat #mqtt
+- [ ] Add optional MQTT/WiFi publishing [#3](https://github.com/Pogeu/Solmar-BMS-ESPNow/issues/3) ~2d #feat #mqtt
   - [ ] Define configuration flow without making WiFi mandatory
   - [ ] Publish the same main battery fields sent over ESP-NOW
   - [ ] Keep ESP-NOW-only mode as the default firmware path
 
-- [ ] Add optional LoRa telemetry ~3d #feat #lora
+- [ ] Add optional LoRa telemetry [#4](https://github.com/Pogeu/Solmar-BMS-ESPNow/issues/4) ~3d #feat #lora
   - [ ] Choose target LoRa module and pinout
   - [ ] Define payload format or reuse the ESP-NOW battery packet
   - [ ] Add receiver example for LoRa data
 
-- [ ] Add stale-data indicator on the LCD receiver ~4h #ux
+- [ ] Add stale-data indicator on the LCD receiver [#5](https://github.com/Pogeu/Solmar-BMS-ESPNow/issues/5) ~4h #ux
   - [ ] Show when the last ESP-NOW packet is older than the timeout
 
-- [ ] Add I2C scanner helper for LCD setup ~2h #tooling
+- [ ] Add I2C scanner helper for LCD setup [#6](https://github.com/Pogeu/Solmar-BMS-ESPNow/issues/6) ~2h #tooling
   - [ ] Print detected LCD backpack addresses on serial monitor
 
-- [ ] Add optional sender MAC filtering ~4h #feat #espnow
+- [ ] Add optional sender MAC filtering [#7](https://github.com/Pogeu/Solmar-BMS-ESPNow/issues/7) ~4h #feat #espnow
   - [ ] Accept packets only from a configured gateway MAC address
 
 ### In Progress
 
-- [ ] Validate upload and live ESP-NOW reception on the physical ESP32-C3 boards ~2h #test
+- [ ] Validate upload and live ESP-NOW reception on the physical ESP32-C3 boards [#8](https://github.com/Pogeu/Solmar-BMS-ESPNow/issues/8) ~2h #test
 
 ### Done ✓
 
