@@ -18,18 +18,64 @@ layouts.
 
 ## Gateway
 
-Build the serial-only ESP32-C3 gateway:
+The gateway is the board connected to the battery RS485 bus. Upload only one
+gateway firmware, depending on which board you are using.
+
+If the `pio` command is not available in your terminal, replace `pio` with the
+full PlatformIO path:
+
+```sh
+C:\Users\pedro\.platformio\penv\Scripts\platformio.exe
+```
+
+Before uploading, list the connected serial ports:
+
+```sh
+pio device list
+```
+
+If only one ESP32 is connected, PlatformIO usually detects the port
+automatically. If more than one board is connected, pass the upload port
+explicitly with `--upload-port COMx`.
+
+Build the serial-only ESP32-C3 gateway without uploading:
 
 ```sh
 cd firmware/gateway
 pio run -e esp32-c3-serial
 ```
 
-Build the ESP32 WiFi/MQTT gateway:
+Upload the serial-only ESP32-C3 gateway:
+
+```sh
+cd firmware/gateway
+pio run -e esp32-c3-serial -t upload
+```
+
+Upload it to a specific port:
+
+```sh
+pio run -e esp32-c3-serial -t upload --upload-port COM5
+```
+
+Open the serial monitor for this gateway:
+
+```sh
+pio device monitor -b 9600
+```
+
+Build the ESP32 WiFi/MQTT gateway without uploading:
 
 ```sh
 cd firmware/gateway
 pio run -e esp32dev
+```
+
+Upload the ESP32 WiFi/MQTT gateway:
+
+```sh
+cd firmware/gateway
+pio run -e esp32dev -t upload
 ```
 
 Compile the ESP-NOW packet unit test:
@@ -41,17 +87,35 @@ pio test -e espnow-packet-test --without-uploading --without-testing
 
 ## LCD Receiver
 
-Build the ESP32-C3 LCD receiver:
+The LCD receiver is the second ESP32-C3. It is not connected to RS485. It only
+receives ESP-NOW packets and updates the 16x2 I2C display.
+
+Disconnect the gateway board or use `--upload-port COMx` so you do not upload
+the receiver firmware to the wrong board.
+
+Build the ESP32-C3 LCD receiver without uploading:
 
 ```sh
 cd firmware/receiver-lcd
 pio run -e esp32-c3-lcd-receiver
 ```
 
-Upload with:
+Upload the ESP32-C3 LCD receiver:
 
 ```sh
+cd firmware/receiver-lcd
 pio run -e esp32-c3-lcd-receiver -t upload
+```
+
+Upload it to a specific port:
+
+```sh
+pio run -e esp32-c3-lcd-receiver -t upload --upload-port COM6
+```
+
+Open the serial monitor for the LCD receiver:
+
+```sh
 pio device monitor -b 115200
 ```
 
@@ -60,7 +124,22 @@ pio device monitor -b 115200
 The receiver and sender must use the same ESP-NOW channel.
 
 For the serial-only gateway, this is `ESP_NOW_WIFI_CHANNEL` in
-`firmware/gateway/platformio.ini`.
+`firmware/gateway/platformio.ini`. The receiver has the same setting in
+`firmware/receiver-lcd/platformio.ini`. The default value is channel `1` in
+both firmwares.
 
 For the WiFi/MQTT gateway, the radio follows the connected access point channel,
-so set the receiver's `ESP_NOW_WIFI_CHANNEL` to the WiFi router channel.
+so set the receiver's `ESP_NOW_WIFI_CHANNEL` to the WiFi router channel. For
+example, if the router uses channel `6`, set this in the receiver:
+
+```ini
+build_flags =
+	-D ESP_NOW_WIFI_CHANNEL=6
+```
+
+If the LCD receiver keeps showing `Sem dados`, check these items first:
+
+- the gateway is powered and reading the battery
+- both boards use the same ESP-NOW channel
+- the receiver was uploaded with the receiver firmware, not the gateway firmware
+- the LCD I2C address is correct (`0x27` or `0x3F` are common)

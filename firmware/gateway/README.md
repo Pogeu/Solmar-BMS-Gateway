@@ -10,10 +10,35 @@ Build the default ESP32-C3 serial-only gateway:
 pio run -e esp32-c3-serial
 ```
 
+Upload the default ESP32-C3 serial-only gateway:
+
+```sh
+pio run -e esp32-c3-serial -t upload
+```
+
 Build the WiFi/MQTT ESP32 gateway:
 
 ```sh
 pio run -e esp32dev
+```
+
+Upload the WiFi/MQTT ESP32 gateway:
+
+```sh
+pio run -e esp32dev -t upload
+```
+
+If more than one board is connected, list ports and choose one explicitly:
+
+```sh
+pio device list
+pio run -e esp32-c3-serial -t upload --upload-port COM5
+```
+
+Open the monitor:
+
+```sh
+pio device monitor -b 9600
 ```
 
 Compile the packet unit test:
