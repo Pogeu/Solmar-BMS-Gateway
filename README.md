@@ -81,15 +81,10 @@ pio test -e espnow-packet-test --without-uploading --without-testing
 
 ## Verificações no GitHub
 
-O repositório tem dois workflows para pull requests:
+O repositório tem um workflow para pull requests:
 
 - `.github/workflows/ci.yml`: compila o firmware do gateway, compila os testes
   PlatformIO e compila o receptor LCD.
-- `.github/workflows/codex-review.yml`: executa uma revisão automática com
-  `openai/codex-action@v1` e comenta o resultado no pull request.
-
-Para a revisão Codex funcionar, configure o segredo `OPENAI_API_KEY` em
-`Settings > Secrets and variables > Actions` no GitHub.
 
 ## Receptor LCD
 
