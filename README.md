@@ -2,6 +2,9 @@
 
 Repositório único dos firmwares de telemetria da bateria do projeto Solmar.
 
+> [!NOTE]  
+> O modelo da bateria que esta sendo utilizada é Felicity FLA12171-EU.
+
 O repositório contém dois firmwares PlatformIO independentes e um cabeçalho de
 protocolo compartilhado:
 
@@ -132,3 +135,13 @@ Se o receptor LCD continuar mostrando `Sem dados`, confira primeiro:
 - as duas placas usam o mesmo canal ESP-NOW
 - o receptor recebeu o firmware do receptor, não o firmware do gateway
 - o endereço I2C do LCD está correto (`0x27` e `0x3F` são comuns)
+
+
+## Fontes usadas
+
+| Fonte | O que foi usado no projeto |
+|---|---|
+| [Smartsmurf/FelicityBMS2MQTT](https://github.com/Smartsmurf/FelicityBMS2MQTT) | Base principal do RS485/Modbus da BMS. Usado para os registradores `0xF80B`, `0x1302`, `0x131C` e `0x132A`, além das escalas de tensão, corrente, limites, células, temperaturas e flags. |
+| [alexbenisch/felicity-bms](https://github.com/alexbenisch/felicity-bms) | Confirmou os comandos RS485 `0xF80B`, `0x1302` e `0x132A`, os offsets internos de tensão/corrente/SOC e o fallback `0x132A len 0x14` para ler 16 slots de célula + 4 temperaturas. |
+| [mr-manuel/venus-os_dbus-serialbattery](https://github.com/mr-manuel/venus-os_dbus-serialbattery) | Não foi usado como mapa Modbus, mas ajudou a confirmar o comportamento da BMS Felicity: células em mV, temperaturas filtrando `0x7FFF` e existência de campos internos como versão, modelo, serial, warnings e faults via BLE. |
+| [Manual Felicity FLA12171-EU](./FLA12171-EU%20User%20Guide%20-%20English.pdf) | Usado para validar o modelo da bateria, tensão nominal, faixa de operação, limites elétricos, comunicação RS485/CAN e pinagem do conector. |
