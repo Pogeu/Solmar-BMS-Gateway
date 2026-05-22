@@ -3,7 +3,7 @@
 Repositório único dos firmwares de telemetria da bateria do projeto Solmar.
 
 > [!NOTE]  
-> O modelo da bateria que esta sendo utilizada é Felicity FLA12171-EU.
+> O modelo da bateria que esta sendo utilizada é **Felicity FLA12171-EU**.
 
 O repositório contém dois firmwares PlatformIO independentes e um cabeçalho de
 protocolo compartilhado:
