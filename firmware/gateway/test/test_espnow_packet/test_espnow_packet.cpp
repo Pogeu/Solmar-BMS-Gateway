@@ -22,7 +22,8 @@ static BmsMessage makeBatteryMessage()
   msg.payload.batteryInfo.current = -12.4f;
   msg.payload.batteryInfo.packPowerW = -635.252f;
   msg.payload.batteryInfo.soc = 87;
-  msg.payload.batteryInfo.temp = 29;
+  msg.payload.batteryInfo.batteryTemperatureValid = true;
+  msg.payload.batteryInfo.tempC = 29.4f;
 
   return msg;
 }

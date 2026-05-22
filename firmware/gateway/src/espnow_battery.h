@@ -60,6 +60,23 @@ inline uint16_t espnowBatteryFaultFlags(const BmsMessage &msg)
   return flags;
 }
 
+inline uint16_t espnowBatteryTemperatureC(const BmsMessage &msg)
+{
+  if (!msg.payload.batteryInfo.batteryTemperatureValid) {
+    return 0;
+  }
+
+  float tempC = msg.payload.batteryInfo.tempC;
+  if (tempC <= 0.0f) {
+    return 0;
+  }
+  if (tempC >= 65535.0f) {
+    return 65535;
+  }
+
+  return (uint16_t)(tempC + 0.5f);
+}
+
 inline bool espnowBatteryBuildPacket(const BmsMessage &msg, uint32_t sequence,
                                      uint32_t uptimeMs, EspNowBatteryPacket *packet)
 {
@@ -78,7 +95,7 @@ inline bool espnowBatteryBuildPacket(const BmsMessage &msg, uint32_t sequence,
   packet->currentA = msg.payload.batteryInfo.current;
   packet->packPowerW = msg.payload.batteryInfo.packPowerW;
   packet->socPercent = msg.payload.batteryInfo.soc;
-  packet->temperatureC = msg.payload.batteryInfo.temp;
+  packet->temperatureC = espnowBatteryTemperatureC(msg);
   packet->statusFlags = espnowBatteryStatusFlags(msg);
   packet->faultFlags = espnowBatteryFaultFlags(msg);
 

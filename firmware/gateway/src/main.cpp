@@ -35,6 +35,7 @@ static void printSerialMessage(const BmsMessage &msg)
       break;
 
     case BMS_TYPE_CELL_VOLTAGES:
+      Serial.printf("cells_temps_regs_read = %u\n", (unsigned)msg.payload.cellInfo.cellsTempsRegsRead);
       for (uint8_t i = 0; i < msg.payload.cellInfo.validCellCount; i++) {
         Serial.printf("cell_voltage_%u = %.3f\n", (unsigned)i, msg.payload.cellInfo.cellVoltages[i]);
       }
@@ -67,7 +68,11 @@ static void printSerialMessage(const BmsMessage &msg)
       Serial.printf("current = %.2f\n", msg.payload.batteryInfo.current);
       Serial.printf("pack_power_w = %.1f\n", msg.payload.batteryInfo.packPowerW);
       Serial.printf("soc = %u\n", (unsigned)msg.payload.batteryInfo.soc);
-      Serial.printf("temperature = %u\n", (unsigned)msg.payload.batteryInfo.temp);
+      if (msg.payload.batteryInfo.batteryTemperatureValid) {
+        Serial.printf("temperature = %.1f\n", msg.payload.batteryInfo.tempC);
+      } else {
+        Serial.println("temperature = INVALID");
+      }
       Serial.printf("battery_charge_enable = %s\n", msg.payload.batteryInfo.batteryChargeEnable ? "true" : "false");
       Serial.printf("battery_charge_immediately = %s\n", msg.payload.batteryInfo.batteryChargeImmediately ? "true" : "false");
       Serial.printf("battery_discharge_enable = %s\n", msg.payload.batteryInfo.batteryDischargeEnable ? "true" : "false");

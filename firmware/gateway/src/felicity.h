@@ -7,8 +7,6 @@
 #ifndef FELICITY_BMS_H
 #define FELICITY_BMS_H
 
-#include <SoftwareSerial.h>
-
 #include "crc.h"
 
 extern volatile bool systemShutdown;
@@ -16,12 +14,12 @@ extern volatile bool systemShutdown;
 static const uint8_t FELICITY_MAX_CELL_SLOTS = 16;
 static const uint8_t FELICITY_MAX_TEMPERATURE_SLOTS = 8;
 
-inline uint16_t be16(uint8_t * val) {
-  return ((uint16_t)(*val++ << 8) | *val);
+inline uint16_t be16(const uint8_t * val) {
+  return ((uint16_t)val[0] << 8) | val[1];
 }
 
-inline int be16int(uint8_t * val) {
-  return ((int)(*val++ << 8) | *val);
+inline int be16int(const uint8_t * val) {
+  return ((int)val[0] << 8) | val[1];
 }
 
 enum BmsDataType {
@@ -42,6 +40,7 @@ struct BmsMessage {
             bool batteryChargeEnable;
             bool batteryChargeImmediately;
             bool batteryDischargeEnable;
+            bool batteryTemperatureValid;
             bool faultCellVoltageHigh;
             bool faultCellVoltageLow;
             bool faultChargeCurrentHigh;
@@ -53,7 +52,7 @@ struct BmsMessage {
             float current;
             float packPowerW;
             uint16_t soc;
-            uint16_t temp;
+            float tempC;
         } batteryInfo;
 
         struct {
@@ -77,6 +76,7 @@ struct BmsMessage {
             float tempMaxC;
             float tempAvgC;
             float tempDeltaC;
+            uint16_t cellsTempsRegsRead;
         } cellInfo;
     } payload;
 };
@@ -86,15 +86,18 @@ class FelicityBMS
 
 private:
 
-    EspSoftwareSerial::UART * serial;
-    // SoftwareSerial * serial;
+    HardwareSerial * serial;
     int num_slaves;
     QueueHandle_t bmsQueue;
     int dePin;
     int rePin;
+    uint8_t lastSid = 0;
+    uint8_t lastCmd = 0;
 
     void enableTx();
     void enableRx();
+    void clearInput();
+    int readHolding(uint8_t sid, uint16_t addr, uint16_t count, uint8_t *payload, size_t payloadMax);
 
 public:
 
