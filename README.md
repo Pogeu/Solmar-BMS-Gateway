@@ -1,33 +1,55 @@
 # Solmar BMS Gateway
 
-Repositório único dos firmwares de telemetria da bateria do projeto Solmar.
+Repositório dos firmwares e da página de telemetria da bateria do projeto
+Solmar. O objetivo do sistema é ser a interface entre a bateria do barco e as
+pessoas que precisam acompanhar seu estado: o usuário perto do barco pelo LCD e
+a equipe remota pelo dashboard MQTT.
 
 > [!NOTE]  
 > O modelo da bateria que esta sendo utilizada é **Felicity FLA12171-EU**.
 
-O repositório contém dois firmwares PlatformIO independentes e um cabeçalho de
-protocolo compartilhado:
+ESP-NOW, MQTT/WiFi, microSD e futuras conexões GSM são meios de transportar ou
+registrar os dados. O foco do projeto é entregar leitura clara, local e remota,
+dos dados do BMS.
+
+O repositório contém:
 
 - `firmware/gateway`: lê os dados do BMS Felicity/Felicity ESS via RS485 Modbus
-  e transmite os dados principais da bateria por ESP-NOW.
-- `firmware/receiver-lcd`: recebe o pacote ESP-NOW em um segundo ESP32-C3 e
-  mostra os principais valores em um LCD 16x2 I2C.
-- `shared`: formato comum do pacote ESP-NOW usado pelos dois firmwares.
+  e atua como origem da telemetria.
+- `firmware/receiver-lcd`: mostra os principais valores em um LCD 16x2 I2C para
+  quem esta perto do barco. Nesta topologia ele recebe os dados por ESP-NOW.
+- `dashboard`: página web para a equipe acompanhar a bateria a distancia por
+  MQTT.
+- `shared`: formato comum do pacote ESP-NOW usado quando o LCD local fica em um
+  segundo ESP32-C3.
 
-O firmware ativo não publica dados por MQTT e não conecta em uma rede WiFi.
-O ESP-NOW usa internamente o rádio do ESP32, mas não precisa de roteador, SSID,
-senha ou broker MQTT.
+## Visão geral
 
-Manter o pacote ESP-NOW em `shared/espnow_battery_packet.h` evita um erro comum
-em projetos embarcados: transmissor e receptor evoluírem para formatos binários
-diferentes sem perceber.
+O gateway fica conectado ao barramento RS485 da bateria e transforma as leituras
+do BMS em informação de uso:
+
+- LCD local: leitura rápida para operação e diagnóstico perto do barco.
+- Dashboard remoto: visão para a equipe quando ela não esta no barco.
+- Log microSD: histórico simples em JSON Lines para análise posterior.
+- ESP-NOW: transporte local sem roteador quando o LCD esta em outra placa.
+- MQTT/WiFi: transporte atual para o dashboard remoto.
+
+O ambiente mais completo hoje é `esp32-c3-gateway-lcd-direct`: uma placa lê a
+BMS via RS485, atualiza o LCD local, grava no microSD e publica no MQTT. O
+ambiente `esp32-c3-gateway` continua disponível quando for melhor separar a
+placa que lê a BMS da placa que mostra o LCD.
 
 Possíveis integrações futuras ficam listadas em [TODO.md](TODO.md), incluindo
-publicação MQTT/WiFi e LoRa.
+LoRa e troca do backend WiFi por GSM.
 
-## Gateway
+## Gateway RS485
 
-O gateway é a placa conectada ao barramento RS485 da bateria.
+O gateway é a placa conectada ao barramento RS485 da bateria. Ele pode operar em
+duas topologias principais:
+
+- `esp32-c3-gateway`: lê a BMS e envia um pacote ESP-NOW para outro ESP32-C3.
+- `esp32-c3-gateway-lcd-direct`: lê a BMS, atualiza o LCD local, grava microSD e
+  publica MQTT para o dashboard.
 
 Se o comando `pio` não estiver disponível no terminal, substitua `pio` pelo
 caminho completo do PlatformIO:
@@ -46,7 +68,7 @@ Se apenas um ESP32 estiver conectado, o PlatformIO geralmente detecta a porta
 automaticamente. Se houver mais de uma placa conectada, informe a porta
 explicitamente com `--upload-port COMx`.
 
-Compilar o gateway ESP32-C3 sem fazer upload:
+Compilar o gateway ESP32-C3 com saída ESP-NOW sem fazer upload:
 
 ```sh
 cd firmware/gateway
@@ -86,10 +108,17 @@ O repositório tem um workflow para pull requests:
 - `.github/workflows/ci.yml`: compila o firmware do gateway, compila os testes
   PlatformIO e compila o receptor LCD.
 
-## Receptor LCD
+## LCD local
 
-O receptor LCD é o segundo ESP32-C3. Ele não é conectado ao RS485. Ele apenas
-recebe pacotes ESP-NOW e atualiza o display LCD 16x2 I2C.
+O LCD local é a interface para quem esta perto do barco. Ele mostra SOC,
+potência, tensão, corrente, temperatura, status de carga/descarga, falhas e
+idade da última leitura.
+
+Existem duas formas de usar o LCD:
+
+- LCD direto no gateway: usado pelo ambiente `esp32-c3-gateway-lcd-direct`.
+- LCD em uma segunda placa: usado pelo `firmware/receiver-lcd`, recebendo dados
+  por ESP-NOW.
 
 Desconecte a placa do gateway ou use `--upload-port COMx` para evitar gravar o
 firmware do receptor na placa errada.
@@ -120,9 +149,13 @@ Abrir o monitor serial do receptor LCD:
 pio device monitor -b 115200
 ```
 
-## Canal ESP-NOW
+## ESP-NOW para LCD separado
 
-O receptor e o transmissor precisam usar o mesmo canal ESP-NOW.
+ESP-NOW é usado quando o LCD local fica em uma segunda placa ESP32-C3. Ele não
+é a finalidade do projeto, mas uma forma prática de levar os dados do gateway
+até o display sem roteador, SSID, senha ou broker.
+
+Nesse caso, receptor e transmissor precisam usar o mesmo canal ESP-NOW.
 
 A configuração do gateway é `ESP_NOW_WIFI_CHANNEL` em
 `firmware/gateway/platformio.ini`. O receptor tem a mesma configuração em
@@ -143,11 +176,13 @@ Se o receptor LCD continuar mostrando `Sem dados`, confira primeiro:
 - o receptor recebeu o firmware do receptor, não o firmware do gateway
 - o endereço I2C do LCD está correto (`0x27` e `0x3F` são comuns)
 
-## Gateway LCD direto com microSD
+## Gateway LCD direto, microSD e MQTT
 
 O ambiente `esp32-c3-gateway-lcd-direct` usa uma única placa ESP32-C3 conectada
-ao RS485 da bateria e ao LCD I2C. Nesse modo o ESP-NOW fica desativado, e o
-firmware também grava cada leitura do BMS no microSD em JSON Lines:
+ao RS485 da bateria e ao LCD I2C. Esse é o caminho principal para transformar a
+leitura da bateria em informação local e remota. Nesse modo o ESP-NOW fica
+desativado, e o firmware também grava cada leitura do BMS no microSD em JSON
+Lines:
 
 ```text
 /bms_log.jsonl
@@ -156,7 +191,7 @@ firmware também grava cada leitura do BMS no microSD em JSON Lines:
 Cada linha é um objeto JSON independente com o schema
 `solmar.bms.reading.v1`. Esse formato foi escolhido em vez de CSV porque as
 leituras têm tipos diferentes e arrays de células/temperaturas. O mesmo objeto
-JSON pode ser reaproveitado como payload em uma futura publicação MQTT.
+JSON é usado como payload MQTT para o dashboard.
 
 Pinagem configurada para o módulo microSD SPI:
 
@@ -199,7 +234,7 @@ pio run -e esp32-c3-gateway-lcd-direct -t upload
 Se o cartão não inicializar, o firmware continua lendo o BMS e atualizando o
 LCD; o erro aparece no monitor serial com prefixo `[SD]`.
 
-### MQTT e dashboard web
+### Dashboard remoto por MQTT
 
 O mesmo ambiente `esp32-c3-gateway-lcd-direct` tambem pode publicar cada leitura
 em MQTT. A conexao WiFi usa WiFiManager: na primeira configuracao, ou se nao

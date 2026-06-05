@@ -1,6 +1,7 @@
 # Solmar BMS dashboard
 
-Dashboard web estatico para visualizar os pacotes MQTT publicados pelo gateway
+Dashboard web estatico para a equipe acompanhar a bateria quando nao esta perto
+do barco. Ele visualiza os pacotes MQTT publicados pelo gateway
 `esp32-c3-gateway-lcd-direct`.
 
 Abra `index.html` no navegador e conecte usando os valores padrao:

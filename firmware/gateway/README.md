@@ -1,13 +1,20 @@
 # Firmware Gateway
 
-Lê os valores do BMS Felicity/Felicity ESS via RS485 Modbus e transmite os
-dados principais da bateria por ESP-NOW.
+Lê os valores do BMS Felicity/Felicity ESS via RS485 Modbus e transforma esses
+dados em informação para o usuário local e para a equipe remota.
 
-Este firmware intencionalmente não publica por MQTT e não conecta em uma rede
-WiFi. O ESP-NOW usa o rádio do ESP32 diretamente, sem SSID, senha, roteador ou
-broker MQTT.
+Este projeto tem dois ambientes principais neste diretório:
 
-Compilar o gateway ESP32-C3:
+- `esp32-c3-gateway`: lê a BMS e transmite um resumo por ESP-NOW para um LCD em
+  outra placa ESP32-C3.
+- `esp32-c3-gateway-lcd-direct`: lê a BMS, atualiza um LCD conectado na mesma
+  placa, grava JSON Lines no microSD e publica MQTT para o dashboard.
+
+ESP-NOW é uma opção de transporte local para separar a placa do gateway da
+placa do LCD. O objetivo maior do firmware é servir como gateway entre a BMS e
+as interfaces de uso do projeto.
+
+Compilar o gateway ESP32-C3 com saída ESP-NOW:
 
 ```sh
 pio run -e esp32-c3-gateway
@@ -33,11 +40,12 @@ Abrir o monitor serial:
 pio device monitor -b 9600
 ```
 
-## Modo direto RS485 -> LCD 16x2
+## Modo direto RS485 -> LCD 16x2 -> MQTT
 
-O terceiro firmware deste projeto e o `esp32-c3-gateway-lcd-direct`. Ele le a
-bateria Felicity/Felicity ESS pelo mesmo barramento RS485 do gateway, mas nao
-usa ESP-NOW. Os dados sao escritos direto no LCD I2C 16x2.
+O ambiente `esp32-c3-gateway-lcd-direct` le a bateria Felicity/Felicity ESS pelo
+mesmo barramento RS485 do gateway, mas nao usa ESP-NOW. Os dados sao escritos
+direto no LCD I2C 16x2, gravados no microSD e publicados em MQTT para o
+dashboard remoto.
 
 Compilar:
 
@@ -94,4 +102,5 @@ pio test -e espnow-packet-test
 ```
 
 O pacote binário ESP-NOW compartilhado com o receptor fica em
-`../../shared/espnow_battery_packet.h`.
+`../../shared/espnow_battery_packet.h`. O payload MQTT do modo direto usa o
+schema JSON `solmar.bms.reading.v1`.
