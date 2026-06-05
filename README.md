@@ -1,4 +1,4 @@
-# Solmar BMS ESP-NOW
+# Solmar BMS Gateway
 
 Repositório único dos firmwares de telemetria da bateria do projeto Solmar.
 
