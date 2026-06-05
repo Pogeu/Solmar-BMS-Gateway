@@ -199,6 +199,41 @@ pio run -e esp32-c3-gateway-lcd-direct -t upload
 Se o cartão não inicializar, o firmware continua lendo o BMS e atualizando o
 LCD; o erro aparece no monitor serial com prefixo `[SD]`.
 
+### MQTT e dashboard web
+
+O mesmo ambiente `esp32-c3-gateway-lcd-direct` tambem pode publicar cada leitura
+em MQTT. A conexao WiFi usa WiFiManager: na primeira configuracao, ou se nao
+houver credenciais salvas, o ESP abre o portal `Solmar-BMS-Setup` por ate 120
+segundos. Se o WiFi nao for configurado, a leitura RS485, o LCD e o microSD
+continuam funcionando.
+
+Configuracao padrao em `firmware/gateway/platformio.ini`:
+
+```ini
+-D BMS_MQTT_ENABLE=1
+-D BMS_MQTT_HOST=\"broker.hivemq.com\"
+-D BMS_MQTT_PORT=1883
+-D BMS_MQTT_TOPIC_BASE=\"solmar/bms/felicity-fla12171\"
+```
+
+Os payloads usam o mesmo schema JSON `solmar.bms.reading.v1` do log em microSD
+e sao publicados como mensagens retidas nos topicos:
+
+```text
+solmar/bms/felicity-fla12171/readings/v1/<device_id>/<tipo>
+```
+
+A pagina em `dashboard/index.html` assina por WebSocket o filtro:
+
+```text
+solmar/bms/felicity-fla12171/readings/v1/+/+
+```
+
+O codigo MQTT foi separado em `firmware/gateway/src/bms_mqtt_publisher.cpp`.
+Para implementar GSM no futuro, troque o backend de rede desse modulo por um
+cliente compativel com `Client`, como TinyGSM, sem alterar o parser do BMS nem a
+pagina.
+
 
 ## Fontes usadas
 
