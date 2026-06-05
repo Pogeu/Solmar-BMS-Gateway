@@ -1,7 +1,11 @@
-# Receptor ESP-NOW com LCD
+# LCD local via ESP-NOW
 
-Firmware para um segundo ESP32-C3 que recebe o broadcast de bateria enviado pelo
-gateway via ESP-NOW e mostra os principais valores em um LCD 16x2 I2C.
+Firmware para usar o LCD local em um segundo ESP32-C3. Ele recebe o broadcast de
+bateria enviado pelo gateway via ESP-NOW e mostra os principais valores em um
+LCD 16x2 I2C para quem esta perto do barco.
+
+Esta é uma das topologias possíveis do projeto. Quando o LCD fica conectado na
+mesma placa que lê o RS485, use o ambiente `esp32-c3-gateway-lcd-direct`.
 
 Ligação padrão:
 

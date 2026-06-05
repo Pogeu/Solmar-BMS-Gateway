@@ -1,31 +1,26 @@
 # TODO
 
-Project task list for the Solmar BMS ESP-NOW firmwares.
+Project task list for the Solmar BMS Gateway firmwares and dashboard.
 
 ### Todo
 
-- [ ] Add optional MQTT/WiFi publishing [#3](https://github.com/Pogeu/Solmar-BMS-ESPNow/issues/3) ~2d #feat #mqtt
-  - [ ] Define configuration flow without making WiFi mandatory
-  - [ ] Publish the same main battery fields sent over ESP-NOW
-  - [ ] Keep ESP-NOW-only mode as the default firmware path
-
-- [ ] Add optional LoRa telemetry [#4](https://github.com/Pogeu/Solmar-BMS-ESPNow/issues/4) ~3d #feat #lora
+- [ ] Add optional LoRa telemetry [#4](https://github.com/Pogeu/Solmar-BMS-Gateway/issues/4) ~3d #feat #lora
   - [ ] Choose target LoRa module and pinout
-  - [ ] Define payload format or reuse the ESP-NOW battery packet
+  - [ ] Define payload format or reuse the gateway JSON telemetry schema
   - [ ] Add receiver example for LoRa data
 
-- [ ] Add stale-data indicator on the LCD receiver [#5](https://github.com/Pogeu/Solmar-BMS-ESPNow/issues/5) ~4h #ux
+- [ ] Add stale-data indicator on the LCD receiver [#5](https://github.com/Pogeu/Solmar-BMS-Gateway/issues/5) ~4h #ux
   - [ ] Show when the last ESP-NOW packet is older than the timeout
 
-- [ ] Add I2C scanner helper for LCD setup [#6](https://github.com/Pogeu/Solmar-BMS-ESPNow/issues/6) ~2h #tooling
+- [ ] Add I2C scanner helper for LCD setup [#6](https://github.com/Pogeu/Solmar-BMS-Gateway/issues/6) ~2h #tooling
   - [ ] Print detected LCD backpack addresses on serial monitor
 
-- [ ] Add optional sender MAC filtering [#7](https://github.com/Pogeu/Solmar-BMS-ESPNow/issues/7) ~4h #feat #espnow
+- [ ] Add optional sender MAC filtering [#7](https://github.com/Pogeu/Solmar-BMS-Gateway/issues/7) ~4h #feat #espnow
   - [ ] Accept packets only from a configured gateway MAC address
 
 ### In Progress
 
-- [ ] Validate upload and live ESP-NOW reception on the physical ESP32-C3 boards [#8](https://github.com/Pogeu/Solmar-BMS-ESPNow/issues/8) ~2h #test
+- [ ] Validate upload and live ESP-NOW reception on the physical ESP32-C3 boards [#8](https://github.com/Pogeu/Solmar-BMS-Gateway/issues/8) ~2h #test
 
 ### Done ✓
 
@@ -36,3 +31,5 @@ Project task list for the Solmar BMS ESP-NOW firmwares.
 - [x] Remove active MQTT/WiFi publishing from the gateway firmware ~2h #cleanup
 - [x] Implement ESP32-C3 16x2 I2C LCD receiver ~1d #feat
 - [x] Add ESP-NOW packet unit test build ~3h #test
+- [x] Add WiFiManager/MQTT publishing for the LCD-direct gateway ~2d #feat #mqtt
+- [x] Add web dashboard for remote battery monitoring ~1d #feat #dashboard

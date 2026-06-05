@@ -1,5 +1,5 @@
 //
-// Solmar BMS ESP-NOW gateway
+// Solmar BMS Gateway
 //
 #include <Arduino.h>
 
