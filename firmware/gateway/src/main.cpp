@@ -13,6 +13,7 @@
 #endif
 
 #include "bms_sd_logger.h"
+#include "bms_mqtt_publisher.h"
 #include "felicity.h"
 #include "main.h"
 
@@ -597,6 +598,7 @@ void setup()
   setupDirectLcd();
   bmsSdLoggerBegin();
   startBmsTasks(RS485_RX_PIN, RS485_TX_PIN, RS485_DE_PIN, RS485_RE_PIN, BMS_BATTERY_COUNT);
+  bmsMqttPublisherBegin();
 #else
   Serial.println("Gateway mode: RS485 input, ESP-NOW output.");
   Serial.println("MQTT/WiFi publishing is disabled in this firmware.");
@@ -619,10 +621,12 @@ void loop()
   while (bmsQueue != nullptr && xQueueReceive(bmsQueue, &msg, 0) == pdTRUE) {
     handleDirectLcdMessage(msg);
     bmsSdLoggerHandleMessage(msg);
+    bmsMqttPublisherHandleMessage(msg);
     printSerialMessage(msg);
   }
 
   updateDirectLcd();
+  bmsMqttPublisherLoop();
   delay(10);
 #else
   delay(1000);

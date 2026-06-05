@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solmar BMS Dashboard</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f7f5;
+      --surface: #ffffff;
+      --surface-2: #edf3ef;
+      --text: #17211b;
+      --muted: #5d6b62;
+      --line: #d9e3dc;
+      --accent: #147a4b;
+      --accent-2: #0f5d3a;
+      --warn: #a65b00;
+      --danger: #b42318;
+      --shadow: 0 12px 32px rgba(23, 33, 27, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    .app {
+      width: min(1220px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 24px 0 36px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .eyebrow {
+      margin: 0 0 4px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.75rem, 3vw, 2.6rem);
+      font-weight: 800;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 1rem;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 7px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .pill.ok {
+      border-color: #b8ddc7;
+      color: var(--accent-2);
+      background: #e8f6ee;
+    }
+
+    .pill.warn {
+      border-color: #f0d19a;
+      color: var(--warn);
+      background: #fff4df;
+    }
+
+    .pill.bad {
+      border-color: #efb5ae;
+      color: var(--danger);
+      background: #fff1ef;
+    }
+
+    .connection-panel,
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .connection-panel {
+      display: grid;
+      grid-template-columns: minmax(220px, 1.1fr) minmax(280px, 1.6fr) auto auto;
+      gap: 12px;
+      align-items: end;
+      padding: 14px;
+      margin-bottom: 18px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    input {
+      width: 100%;
+      min-height: 42px;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfdfb;
+      color: var(--text);
+      outline: none;
+    }
+
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(20, 122, 75, 0.14);
+    }
+
+    button {
+      min-height: 42px;
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      padding: 0 14px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    button.secondary {
+      border-color: var(--line);
+      background: var(--surface-2);
+      color: var(--text);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1.2fr repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .card {
+      padding: 16px;
+    }
+
+    .metric {
+      min-height: 148px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .metric-title {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      font-size: clamp(1.8rem, 4vw, 3.2rem);
+      font-weight: 850;
+      line-height: 1;
+    }
+
+    .metric-value small {
+      color: var(--muted);
+      font-size: 0.45em;
+      font-weight: 800;
+    }
+
+    .metric-note {
+      color: var(--muted);
+      font-size: 0.9rem;
+      min-height: 1.2em;
+    }
+
+    .soc-card {
+      display: grid;
+      grid-template-columns: 138px 1fr;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .soc-ring {
+      width: 138px;
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: conic-gradient(var(--accent) calc(var(--soc, 0) * 1%), #e3ebe6 0);
+      position: relative;
+    }
+
+    .soc-ring::after {
+      content: "";
+      position: absolute;
+      inset: 14px;
+      border-radius: 50%;
+      background: var(--surface);
+    }
+
+    .soc-ring strong {
+      position: relative;
+      z-index: 1;
+      font-size: 2rem;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .status-list,
+    .fault-list,
+    .limits-list {
+      display: grid;
+      gap: 9px;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .row:last-child {
+      border-bottom: 0;
+    }
+
+    .row span {
+      color: var(--muted);
+    }
+
+    .row strong {
+      text-align: right;
+    }
+
+    .cell-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .cell-row {
+      display: grid;
+      grid-template-columns: 44px minmax(90px, 1fr) 76px;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.92rem;
+    }
+
+    .cell-row span {
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .bar {
+      height: 10px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e1e9e4;
+    }
+
+    .bar i {
+      display: block;
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: var(--surface-2);
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+
+    .raw-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    pre {
+      min-height: 180px;
+      max-height: 320px;
+      margin: 0;
+      overflow: auto;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #111c15;
+      color: #d9f4e3;
+      font-size: 0.82rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 10px 0;
+    }
+
+    @media (max-width: 920px) {
+      .connection-panel,
+      .summary-grid,
+      .detail-grid,
+      .raw-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .soc-card {
+        grid-template-columns: 116px 1fr;
+      }
+
+      .soc-ring {
+        width: 116px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .app {
+        width: min(100% - 20px, 1220px);
+        padding-top: 14px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .card,
+      .connection-panel {
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Solmar BMS</p>
+        <h1>Dashboard da bateria</h1>
+      </div>
+      <div id="connectionPill" class="pill bad">Desconectado</div>
+    </header>
+
+    <section class="connection-panel" aria-label="Conexao MQTT">
+      <label>
+        Broker WebSocket
+        <input id="brokerInput" autocomplete="off" value="wss://broker.hivemq.com:8884/mqtt">
+      </label>
+      <label>
+        Filtro de topico
+        <input id="topicInput" autocomplete="off" value="solmar/bms/felicity-fla12171/readings/v1/+/+">
+      </label>
+      <button id="connectButton" type="button">Conectar</button>
+      <button id="demoButton" class="secondary" type="button">Demo</button>
+    </section>
+
+    <section class="summary-grid" aria-label="Resumo da bateria">
+      <article class="card soc-card">
+        <div id="socRing" class="soc-ring" style="--soc: 0">
+          <strong id="socValue">--%</strong>
+        </div>
+        <div class="metric">
+          <div>
+            <div class="metric-title">Estado de carga</div>
+            <div class="metric-note" id="lastSeen">Aguardando leitura MQTT</div>
+          </div>
+          <div class="metric-note" id="deviceMeta">BMS --</div>
+        </div>
+      </article>
+
+      <article class="card metric">
+        <div class="metric-title">Tensao</div>
+        <div class="metric-value"><span id="voltageValue">--</span> <small>V</small></div>
+        <div class="metric-note" id="voltageNote">Pacote battery_info</div>
+      </article>
+
+      <article class="card metric">
+        <div class="metric-title">Corrente</div>
+        <div class="metric-value"><span id="currentValue">--</span> <small>A</small></div>
+        <div class="metric-note" id="currentNote">Carga positiva, descarga negativa</div>
+      </article>
+
+      <article class="card metric">
+        <div class="metric-title">Potencia</div>
+        <div class="metric-value"><span id="powerValue">--</span> <small>W</small></div>
+        <div class="metric-note" id="temperatureValue">Temp --</div>
+      </article>
+    </section>
+
+    <section class="detail-grid">
+      <article class="card">
+        <h2>Status</h2>
+        <div class="status-list" id="statusList"></div>
+      </article>
+
+      <article class="card">
+        <h2>Limites</h2>
+        <div class="limits-list" id="limitsList"></div>
+      </article>
+    </section>
+
+    <section class="detail-grid">
+      <article class="card">
+        <h2>Celulas</h2>
+        <div class="cell-list" id="cellList">
+          <div class="empty">Aguardando pacote cell_voltages</div>
+        </div>
+        <div class="chips" id="temperatureChips"></div>
+      </article>
+
+      <article class="card">
+        <h2>Falhas</h2>
+        <div class="fault-list" id="faultList"></div>
+      </article>
+    </section>
+
+    <section class="raw-grid">
+      <article class="card">
+        <h2>Ultimo topico</h2>
+        <pre id="lastTopic">Nenhum pacote recebido.</pre>
+      </article>
+
+      <article class="card">
+        <h2>Ultimo payload</h2>
+        <pre id="lastPayload">Nenhum pacote recebido.</pre>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const DEFAULT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
+    const DEFAULT_TOPIC = "solmar/bms/felicity-fla12171/readings/v1/+/+";
+    const STALE_AFTER_MS = 15000;
+
+    const elements = {
+      brokerInput: document.getElementById("brokerInput"),
+      topicInput: document.getElementById("topicInput"),
+      connectButton: document.getElementById("connectButton"),
+      demoButton: document.getElementById("demoButton"),
+      connectionPill: document.getElementById("connectionPill"),
+      socRing: document.getElementById("socRing"),
+      socValue: document.getElementById("socValue"),
+      lastSeen: document.getElementById("lastSeen"),
+      deviceMeta: document.getElementById("deviceMeta"),
+      voltageValue: document.getElementById("voltageValue"),
+      currentValue: document.getElementById("currentValue"),
+      powerValue: document.getElementById("powerValue"),
+      temperatureValue: document.getElementById("temperatureValue"),
+      statusList: document.getElementById("statusList"),
+      limitsList: document.getElementById("limitsList"),
+      cellList: document.getElementById("cellList"),
+      temperatureChips: document.getElementById("temperatureChips"),
+      faultList: document.getElementById("faultList"),
+      lastTopic: document.getElementById("lastTopic"),
+      lastPayload: document.getElementById("lastPayload"),
+    };
+
+    const state = {
+      client: null,
+      connected: false,
+      subscribed: false,
+      messageCount: 0,
+      lastMessageAt: 0,
+      lastBatteryAt: 0,
+      latestTopic: "",
+      latestPayload: "",
+      battery: null,
+      cells: null,
+      limits: null,
+      version: null,
+      meta: null,
+    };
+
+    const faultFields = [
+      ["fault_cell_voltage_high", "Celula com tensao alta"],
+      ["fault_cell_voltage_low", "Celula com tensao baixa"],
+      ["fault_charge_current_high", "Corrente de carga alta"],
+      ["fault_discharge_current_high", "Corrente de descarga alta"],
+      ["fault_bms_temperature_high", "Temperatura alta no BMS"],
+      ["fault_cell_temperature_high", "Temperatura alta em celula"],
+      ["fault_cell_temperature_low", "Temperatura baixa em celula"],
+    ];
+
+    const savedBroker = localStorage.getItem("solmar-bms-broker");
+    const savedTopic = localStorage.getItem("solmar-bms-topic");
+    elements.brokerInput.value = savedBroker || DEFAULT_BROKER;
+    elements.topicInput.value = savedTopic || DEFAULT_TOPIC;
+
+    function formatNumber(value, digits) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) {
+        return "--";
+      }
+      return Number(value).toFixed(digits);
+    }
+
+    function formatBool(value) {
+      if (value === true) return "ON";
+      if (value === false) return "OFF";
+      return "--";
+    }
+
+    function timeAgo(timestamp) {
+      if (!timestamp) return "Aguardando leitura MQTT";
+      const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
+      if (seconds < 2) return "Recebido agora";
+      return `Recebido ha ${seconds}s`;
+    }
+
+    function row(label, value) {
+      return `<div class="row"><span>${label}</span><strong>${value}</strong></div>`;
+    }
+
+    function setConnectionPill(text, mode) {
+      elements.connectionPill.textContent = text;
+      elements.connectionPill.className = `pill ${mode}`;
+    }
+
+    function receiveTelemetry(message, topic, rawPayload) {
+      if (!message || message.schema !== "solmar.bms.reading.v1") {
+        return;
+      }
+
+      state.messageCount += 1;
+      state.lastMessageAt = Date.now();
+      state.latestTopic = topic || "";
+      state.latestPayload = rawPayload || JSON.stringify(message, null, 2);
+      state.meta = {
+        deviceId: message.device_id,
+        sequence: message.sequence,
+        uptimeMs: message.uptime_ms,
+        type: message.type,
+      };
+
+      if (message.type === "battery_info") {
+        state.battery = message.data || {};
+        state.lastBatteryAt = Date.now();
+      } else if (message.type === "cell_voltages") {
+        state.cells = message.data || {};
+      } else if (message.type === "charge_discharge") {
+        state.limits = message.data || {};
+      } else if (message.type === "version_info") {
+        state.version = message.data || {};
+      }
+
+      render();
+    }
+
+    function renderConnectionStatus() {
+      const batteryIsStale = state.lastBatteryAt && Date.now() - state.lastBatteryAt > STALE_AFTER_MS;
+
+      if (state.connected && state.subscribed && batteryIsStale) {
+        setConnectionPill("MQTT conectado, dados antigos", "warn");
+      } else if (state.connected && state.subscribed) {
+        setConnectionPill("MQTT conectado", "ok");
+      } else if (state.connected) {
+        setConnectionPill("Conectado, assinando topico", "warn");
+      } else {
+        setConnectionPill("Desconectado", "bad");
+      }
+
+      elements.connectButton.textContent = state.connected ? "Desconectar" : "Conectar";
+    }
+
+    function renderBattery() {
+      const battery = state.battery || {};
+      const soc = Math.max(0, Math.min(100, Number(battery.soc_percent || 0)));
+
+      elements.socRing.style.setProperty("--soc", Number.isFinite(soc) ? soc : 0);
+      elements.socValue.textContent = state.battery ? `${formatNumber(soc, 0)}%` : "--%";
+      elements.lastSeen.textContent = timeAgo(state.lastBatteryAt);
+      elements.deviceMeta.textContent = state.meta
+        ? `BMS ${state.meta.deviceId || "--"} - seq ${state.meta.sequence || "--"} - ${state.messageCount} msgs`
+        : "BMS --";
+      elements.voltageValue.textContent = formatNumber(battery.voltage_v, 2);
+      elements.currentValue.textContent = formatNumber(battery.current_a, 2);
+      elements.powerValue.textContent = formatNumber(battery.pack_power_w, 1);
+      elements.temperatureValue.textContent = battery.temperature_c === null
+        ? "Temp invalida"
+        : `Temp ${formatNumber(battery.temperature_c, 1)} C`;
+    }
+
+    function renderStatus() {
+      const battery = state.battery || {};
+      elements.statusList.innerHTML = [
+        row("Carga habilitada", formatBool(battery.battery_charge_enable)),
+        row("Carga imediata", formatBool(battery.battery_charge_immediately)),
+        row("Descarga habilitada", formatBool(battery.battery_discharge_enable)),
+        row("Temperatura valida", formatBool(battery.battery_temperature_valid)),
+      ].join("");
+    }
+
+    function renderLimits() {
+      const limits = state.limits;
+      if (!limits) {
+        elements.limitsList.innerHTML = `<div class="empty">Aguardando pacote charge_discharge</div>`;
+        return;
+      }
+
+      elements.limitsList.innerHTML = [
+        row("Limite tensao carga", `${formatNumber(limits.charge_voltage_limit_v, 2)} V`),
+        row("Limite tensao descarga", `${formatNumber(limits.discharge_voltage_limit_v, 2)} V`),
+        row("Limite corrente carga", `${formatNumber(limits.charge_current_limit_a, 1)} A`),
+        row("Limite corrente descarga", `${formatNumber(limits.discharge_current_limit_a, 1)} A`),
+      ].join("");
+    }
+
+    function renderCells() {
+      const cells = state.cells || {};
+      const voltages = Array.isArray(cells.cell_voltages_v) ? cells.cell_voltages_v : [];
+
+      if (!voltages.length) {
+        elements.cellList.innerHTML = `<div class="empty">Aguardando pacote cell_voltages</div>`;
+      } else {
+        const min = Math.min(...voltages);
+        const max = Math.max(...voltages);
+        const span = Math.max(0.001, max - min);
+        elements.cellList.innerHTML = voltages.map((value, index) => {
+          const width = 22 + ((value - min) / span) * 78;
+          return `
+            <div class="cell-row">
+              <span>C${index + 1}</span>
+              <div class="bar"><i style="width: ${width}%"></i></div>
+              <strong>${formatNumber(value, 3)} V</strong>
+            </div>
+          `;
+        }).join("");
+      }
+
+      const temps = Array.isArray(cells.cell_temperatures_c) ? cells.cell_temperatures_c : [];
+      const summary = [];
+      if (cells.cell_min_v !== undefined && cells.cell_max_v !== undefined) {
+        summary.push(`Min ${formatNumber(cells.cell_min_v, 3)} V`);
+        summary.push(`Max ${formatNumber(cells.cell_max_v, 3)} V`);
+      }
+      if (cells.cell_delta_mv !== undefined) {
+        summary.push(`Delta ${formatNumber(cells.cell_delta_mv, 0)} mV`);
+      }
+      temps.forEach((temp, index) => summary.push(`T${index + 1} ${formatNumber(temp, 1)} C`));
+
+      elements.temperatureChips.innerHTML = summary.map((item) => `<span class="chip">${item}</span>`).join("");
+    }
+
+    function renderFaults() {
+      const battery = state.battery || {};
+      const active = faultFields.filter(([key]) => battery[key]);
+
+      if (!state.battery) {
+        elements.faultList.innerHTML = `<div class="empty">Aguardando pacote battery_info</div>`;
+        return;
+      }
+
+      if (!active.length) {
+        elements.faultList.innerHTML = row("Estado", "Sem falhas");
+        return;
+      }
+
+      elements.faultList.innerHTML = active.map(([, label]) => row(label, "Ativa")).join("");
+    }
+
+    function renderRaw() {
+      elements.lastTopic.textContent = state.latestTopic || "Nenhum pacote recebido.";
+      elements.lastPayload.textContent = state.latestPayload || "Nenhum pacote recebido.";
+    }
+
+    function render() {
+      renderConnectionStatus();
+      renderBattery();
+      renderStatus();
+      renderLimits();
+      renderCells();
+      renderFaults();
+      renderRaw();
+    }
+
+    function disconnectMqtt() {
+      if (state.client) {
+        state.client.end(true);
+      }
+      state.client = null;
+      state.connected = false;
+      state.subscribed = false;
+      render();
+    }
+
+    function connectMqtt() {
+      const brokerUrl = elements.brokerInput.value.trim();
+      const topicFilter = elements.topicInput.value.trim();
+
+      if (!brokerUrl || !topicFilter) {
+        setConnectionPill("Informe broker e topico", "bad");
+        return;
+      }
+
+      if (!window.mqtt) {
+        setConnectionPill("Biblioteca MQTT nao carregou", "bad");
+        return;
+      }
+
+      localStorage.setItem("solmar-bms-broker", brokerUrl);
+      localStorage.setItem("solmar-bms-topic", topicFilter);
+      disconnectMqtt();
+      setConnectionPill("Conectando MQTT", "warn");
+
+      const client = mqtt.connect(brokerUrl, {
+        clientId: `solmar-dashboard-${Math.random().toString(16).slice(2)}`,
+        clean: true,
+        connectTimeout: 10000,
+        reconnectPeriod: 3000,
+      });
+
+      state.client = client;
+
+      client.on("connect", () => {
+        state.connected = true;
+        client.subscribe(topicFilter, { qos: 0 }, (error) => {
+          state.subscribed = !error;
+          setConnectionPill(error ? `Erro ao assinar: ${error.message}` : "MQTT conectado", error ? "bad" : "ok");
+          render();
+        });
+      });
+
+      client.on("reconnect", () => {
+        state.connected = false;
+        state.subscribed = false;
+        setConnectionPill("Reconectando MQTT", "warn");
+      });
+
+      client.on("close", () => {
+        state.connected = false;
+        state.subscribed = false;
+        render();
+      });
+
+      client.on("error", (error) => {
+        setConnectionPill(`MQTT: ${error.message}`, "bad");
+      });
+
+      client.on("message", (topic, payload) => {
+        const rawPayload = payload.toString();
+        try {
+          receiveTelemetry(JSON.parse(rawPayload), topic, JSON.stringify(JSON.parse(rawPayload), null, 2));
+        } catch (error) {
+          state.latestTopic = topic;
+          state.latestPayload = `Payload invalido: ${error.message}\n\n${rawPayload}`;
+          renderRaw();
+        }
+      });
+    }
+
+    function pushDemoData() {
+      const sequence = state.messageCount + 1;
+      const base = {
+        schema: "solmar.bms.reading.v1",
+        sequence,
+        uptime_ms: sequence * 1000,
+        device_id: 1,
+      };
+
+      receiveTelemetry({
+        ...base,
+        type: "battery_info",
+        data: {
+          voltage_v: 52.36,
+          current_a: 3.18,
+          pack_power_w: 166.5,
+          soc_percent: 74,
+          temperature_c: 27.4,
+          battery_temperature_valid: true,
+          battery_charge_enable: true,
+          battery_charge_immediately: false,
+          battery_discharge_enable: true,
+          fault_cell_voltage_high: false,
+          fault_cell_voltage_low: false,
+          fault_charge_current_high: false,
+          fault_discharge_current_high: false,
+          fault_bms_temperature_high: false,
+          fault_cell_temperature_high: false,
+          fault_cell_temperature_low: false,
+        },
+      }, "demo/solmar/bms/felicity-fla12171/readings/v1/1/battery_info");
+
+      receiveTelemetry({
+        ...base,
+        sequence: sequence + 1,
+        type: "cell_voltages",
+        data: {
+          valid_cell_count: 16,
+          cell_voltages_v: [3.275, 3.278, 3.281, 3.279, 3.276, 3.280, 3.277, 3.282, 3.279, 3.278, 3.281, 3.280, 3.277, 3.279, 3.278, 3.281],
+          cell_min_v: 3.275,
+          cell_max_v: 3.282,
+          cell_avg_v: 3.279,
+          cell_sum_v: 52.46,
+          cell_delta_mv: 7,
+          valid_temperature_count: 4,
+          cell_temperatures_c: [26.8, 27.1, 27.4, 26.9],
+          temp_min_c: 26.8,
+          temp_max_c: 27.4,
+          temp_avg_c: 27.1,
+          temp_delta_c: 0.6,
+        },
+      }, "demo/solmar/bms/felicity-fla12171/readings/v1/1/cell_voltages");
+
+      receiveTelemetry({
+        ...base,
+        sequence: sequence + 2,
+        type: "charge_discharge",
+        data: {
+          charge_voltage_limit_v: 57.60,
+          discharge_voltage_limit_v: 43.20,
+          charge_current_limit_a: 100.0,
+          discharge_current_limit_a: 120.0,
+        },
+      }, "demo/solmar/bms/felicity-fla12171/readings/v1/1/charge_discharge");
+    }
+
+    elements.connectButton.addEventListener("click", () => {
+      if (state.connected || state.client) {
+        disconnectMqtt();
+      } else {
+        connectMqtt();
+      }
+    });
+
+    elements.demoButton.addEventListener("click", pushDemoData);
+
+    setInterval(renderConnectionStatus, 1000);
+    render();
+  </script>
+</body>
+</html>
