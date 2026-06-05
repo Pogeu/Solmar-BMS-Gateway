@@ -1,6 +1,8 @@
 #include <Arduino.h>
+#include <string.h>
 #include <unity.h>
 
+#include "../../src/bms_telemetry_json.h"
 #include "../../src/espnow_battery.h"
 
 static BmsMessage makeBatteryMessage()
@@ -135,6 +137,56 @@ void test_rejects_non_battery_messages()
   TEST_ASSERT_FALSE(espnowBatteryBuildPacket(msg, 1, 2, nullptr));
 }
 
+void test_builds_battery_json_telemetry_record()
+{
+  BmsMessage msg = makeBatteryMessage();
+  char buffer[1024];
+
+  TEST_ASSERT_TRUE(bmsTelemetryBuildJson(msg, 7, 999, buffer, sizeof(buffer)));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "\"schema\":\"solmar.bms.reading.v1\""));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "\"sequence\":7"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "\"uptime_ms\":999"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "\"device_id\":3"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "\"type\":\"battery_info\""));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "\"voltage_v\":51.23"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "\"current_a\":-12.40"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "\"soc_percent\":87"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "\"temperature_c\":29.4"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "\"fault_cell_voltage_high\":true"));
+}
+
+void test_builds_cell_json_telemetry_record()
+{
+  BmsMessage msg = {};
+  msg.deviceId = 1;
+  msg.type = BMS_TYPE_CELL_VOLTAGES;
+  msg.payload.cellInfo.cellsTempsRegsRead = 24;
+  msg.payload.cellInfo.validCellCount = 3;
+  msg.payload.cellInfo.cellVoltages[0] = 3.451f;
+  msg.payload.cellInfo.cellVoltages[1] = 3.452f;
+  msg.payload.cellInfo.cellVoltages[2] = 3.449f;
+  msg.payload.cellInfo.cellMinV = 3.449f;
+  msg.payload.cellInfo.cellMaxV = 3.452f;
+  msg.payload.cellInfo.cellAvgV = 3.451f;
+  msg.payload.cellInfo.cellSumV = 10.352f;
+  msg.payload.cellInfo.cellDeltaMv = 3.0f;
+  msg.payload.cellInfo.validTemperatureCount = 2;
+  msg.payload.cellInfo.cellTemperatures[0] = 28.0f;
+  msg.payload.cellInfo.cellTemperatures[1] = 29.5f;
+  msg.payload.cellInfo.tempMinC = 28.0f;
+  msg.payload.cellInfo.tempMaxC = 29.5f;
+  msg.payload.cellInfo.tempAvgC = 28.8f;
+  msg.payload.cellInfo.tempDeltaC = 1.5f;
+
+  char buffer[1024];
+  TEST_ASSERT_TRUE(bmsTelemetryBuildJson(msg, 8, 1001, buffer, sizeof(buffer)));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "\"type\":\"cell_voltages\""));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "\"cells_temps_regs_read\":24"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "\"cell_voltages_v\":[3.451,3.452,3.449]"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "\"cell_delta_mv\":3"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "\"cell_temperatures_c\":[28.0,29.5]"));
+}
+
 void setup()
 {
   delay(2000);
@@ -145,6 +197,8 @@ void setup()
   RUN_TEST(test_temperature_rounding_and_bounds);
   RUN_TEST(test_invalid_temperature_is_zero_in_packet);
   RUN_TEST(test_rejects_non_battery_messages);
+  RUN_TEST(test_builds_battery_json_telemetry_record);
+  RUN_TEST(test_builds_cell_json_telemetry_record);
   UNITY_END();
 }
 

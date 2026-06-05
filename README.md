@@ -143,6 +143,62 @@ Se o receptor LCD continuar mostrando `Sem dados`, confira primeiro:
 - o receptor recebeu o firmware do receptor, não o firmware do gateway
 - o endereço I2C do LCD está correto (`0x27` e `0x3F` são comuns)
 
+## Gateway LCD direto com microSD
+
+O ambiente `esp32-c3-gateway-lcd-direct` usa uma única placa ESP32-C3 conectada
+ao RS485 da bateria e ao LCD I2C. Nesse modo o ESP-NOW fica desativado, e o
+firmware também grava cada leitura do BMS no microSD em JSON Lines:
+
+```text
+/bms_log.jsonl
+```
+
+Cada linha é um objeto JSON independente com o schema
+`solmar.bms.reading.v1`. Esse formato foi escolhido em vez de CSV porque as
+leituras têm tipos diferentes e arrays de células/temperaturas. O mesmo objeto
+JSON pode ser reaproveitado como payload em uma futura publicação MQTT.
+
+Pinagem configurada para o módulo microSD SPI:
+
+| microSD | ESP32-C3 |
+|---|---|
+| `3v3` | `3V3` |
+| `GND` | `GND` |
+| `CS` | `GPIO7` |
+| `MOSI` | `GPIO6` |
+| `CLK` | `GPIO4` |
+| `MISO` | `GPIO5` |
+
+O botão de páginas do LCD foi movido para `GPIO10` para deixar o microSD nos
+pinos SPI padrão do ESP32-C3.
+
+Os pinos ficam em `firmware/gateway/platformio.ini`:
+
+```ini
+-D LCD_PAGE_BUTTON_PIN=10
+-D SD_LOG_USE_DEFAULT_SPI_PINS=1
+-D SD_LOG_CS_PIN=7
+-D SD_LOG_SCK_PIN=4
+-D SD_LOG_MISO_PIN=5
+-D SD_LOG_MOSI_PIN=6
+```
+
+Compilar o gateway com LCD direto e microSD:
+
+```sh
+cd firmware/gateway
+pio run -e esp32-c3-gateway-lcd-direct
+```
+
+Fazer upload:
+
+```sh
+pio run -e esp32-c3-gateway-lcd-direct -t upload
+```
+
+Se o cartão não inicializar, o firmware continua lendo o BMS e atualizando o
+LCD; o erro aparece no monitor serial com prefixo `[SD]`.
+
 
 ## Fontes usadas
 

@@ -12,6 +12,7 @@
 #include "espnow_battery.h"
 #endif
 
+#include "bms_sd_logger.h"
 #include "felicity.h"
 #include "main.h"
 
@@ -576,6 +577,7 @@ static void serial_debug_task(void *param)
   BmsMessage msg;
   for (;;) {
     if (xQueueReceive(bmsQueue, &msg, portMAX_DELAY) == pdTRUE) {
+      bmsSdLoggerHandleMessage(msg);
       espnowBatteryHandleMessage(msg);
       printSerialMessage(msg);
     }
@@ -593,12 +595,14 @@ void setup()
   Serial.println("ESP-NOW is disabled in this firmware.");
 
   setupDirectLcd();
+  bmsSdLoggerBegin();
   startBmsTasks(RS485_RX_PIN, RS485_TX_PIN, RS485_DE_PIN, RS485_RE_PIN, BMS_BATTERY_COUNT);
 #else
   Serial.println("Gateway mode: RS485 input, ESP-NOW output.");
   Serial.println("MQTT/WiFi publishing is disabled in this firmware.");
 
   espnowBatteryBegin();
+  bmsSdLoggerBegin();
   startBmsTasks(RS485_RX_PIN, RS485_TX_PIN, RS485_DE_PIN, RS485_RE_PIN, BMS_BATTERY_COUNT);
   xTaskCreatePinnedToCore(serial_debug_task, "SerialDebug", 4096, NULL, 1, NULL, FELICITY_TASK_CORE);
 #endif
@@ -614,6 +618,7 @@ void loop()
   BmsMessage msg;
   while (bmsQueue != nullptr && xQueueReceive(bmsQueue, &msg, 0) == pdTRUE) {
     handleDirectLcdMessage(msg);
+    bmsSdLoggerHandleMessage(msg);
     printSerialMessage(msg);
   }
 
