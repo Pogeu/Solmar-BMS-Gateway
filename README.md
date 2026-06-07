@@ -21,7 +21,7 @@ O repositório contém:
 - `dashboard`: página web para a equipe acompanhar a bateria a distancia por
   MQTT.
 - `shared`: formato comum do pacote ESP-NOW usado quando o LCD local fica em um
-  segundo ESP32-C3.
+  segundo ESP32-S3.
 
 ## Visão geral
 
@@ -34,9 +34,9 @@ do BMS em informação de uso:
 - ESP-NOW: transporte local sem roteador quando o LCD esta em outra placa.
 - MQTT/WiFi: transporte atual para o dashboard remoto.
 
-O ambiente mais completo hoje é `esp32-c3-gateway-lcd-direct`: uma placa lê a
+O ambiente mais completo hoje é `esp32-s3-gateway-lcd-direct`: uma placa lê a
 BMS via RS485, atualiza o LCD local, grava no microSD e publica no MQTT. O
-ambiente `esp32-c3-gateway` continua disponível quando for melhor separar a
+ambiente `esp32-s3-gateway` continua disponível quando for melhor separar a
 placa que lê a BMS da placa que mostra o LCD.
 
 Possíveis integrações futuras ficam listadas em [TODO.md](TODO.md), incluindo
@@ -47,8 +47,8 @@ LoRa e troca do backend WiFi por GSM.
 O gateway é a placa conectada ao barramento RS485 da bateria. Ele pode operar em
 duas topologias principais:
 
-- `esp32-c3-gateway`: lê a BMS e envia um pacote ESP-NOW para outro ESP32-C3.
-- `esp32-c3-gateway-lcd-direct`: lê a BMS, atualiza o LCD local, grava microSD e
+- `esp32-s3-gateway`: lê a BMS e envia um pacote ESP-NOW para outro ESP32-S3.
+- `esp32-s3-gateway-lcd-direct`: lê a BMS, atualiza o LCD local, grava microSD e
   publica MQTT para o dashboard.
 
 Se o comando `pio` não estiver disponível no terminal, substitua `pio` pelo
@@ -68,24 +68,24 @@ Se apenas um ESP32 estiver conectado, o PlatformIO geralmente detecta a porta
 automaticamente. Se houver mais de uma placa conectada, informe a porta
 explicitamente com `--upload-port COMx`.
 
-Compilar o gateway ESP32-C3 com saída ESP-NOW sem fazer upload:
+Compilar o gateway ESP32-S3 com saída ESP-NOW sem fazer upload:
 
 ```sh
 cd firmware/gateway
-pio run -e esp32-c3-gateway
+pio run -e esp32-s3-gateway
 ```
 
-Fazer upload do gateway ESP32-C3:
+Fazer upload do gateway ESP32-S3:
 
 ```sh
 cd firmware/gateway
-pio run -e esp32-c3-gateway -t upload
+pio run -e esp32-s3-gateway -t upload
 ```
 
 Fazer upload em uma porta específica:
 
 ```sh
-pio run -e esp32-c3-gateway -t upload --upload-port COM5
+pio run -e esp32-s3-gateway -t upload --upload-port COM5
 ```
 
 Abrir o monitor serial do gateway:
@@ -116,31 +116,31 @@ idade da última leitura.
 
 Existem duas formas de usar o LCD:
 
-- LCD direto no gateway: usado pelo ambiente `esp32-c3-gateway-lcd-direct`.
+- LCD direto no gateway: usado pelo ambiente `esp32-s3-gateway-lcd-direct`.
 - LCD em uma segunda placa: usado pelo `firmware/receiver-lcd`, recebendo dados
   por ESP-NOW.
 
 Desconecte a placa do gateway ou use `--upload-port COMx` para evitar gravar o
 firmware do receptor na placa errada.
 
-Compilar o receptor LCD ESP32-C3 sem fazer upload:
+Compilar o receptor LCD ESP32-S3 sem fazer upload:
 
 ```sh
 cd firmware/receiver-lcd
-pio run -e esp32-c3-lcd-receiver
+pio run -e esp32-s3-lcd-receiver
 ```
 
-Fazer upload do receptor LCD ESP32-C3:
+Fazer upload do receptor LCD ESP32-S3:
 
 ```sh
 cd firmware/receiver-lcd
-pio run -e esp32-c3-lcd-receiver -t upload
+pio run -e esp32-s3-lcd-receiver -t upload
 ```
 
 Fazer upload em uma porta específica:
 
 ```sh
-pio run -e esp32-c3-lcd-receiver -t upload --upload-port COM6
+pio run -e esp32-s3-lcd-receiver -t upload --upload-port COM6
 ```
 
 Abrir o monitor serial do receptor LCD:
@@ -151,7 +151,7 @@ pio device monitor -b 115200
 
 ## ESP-NOW para LCD separado
 
-ESP-NOW é usado quando o LCD local fica em uma segunda placa ESP32-C3. Ele não
+ESP-NOW é usado quando o LCD local fica em uma segunda placa ESP32-S3. Ele não
 é a finalidade do projeto, mas uma forma prática de levar os dados do gateway
 até o display sem roteador, SSID, senha ou broker.
 
@@ -178,7 +178,7 @@ Se o receptor LCD continuar mostrando `Sem dados`, confira primeiro:
 
 ## Gateway LCD direto, microSD e MQTT
 
-O ambiente `esp32-c3-gateway-lcd-direct` usa uma única placa ESP32-C3 conectada
+O ambiente `esp32-s3-gateway-lcd-direct` usa uma única placa ESP32-S3 conectada
 ao RS485 da bateria e ao LCD I2C. Esse é o caminho principal para transformar a
 leitura da bateria em informação local e remota. Nesse modo o ESP-NOW fica
 desativado, e o firmware também grava cada leitura do BMS no microSD em JSON
@@ -195,7 +195,7 @@ JSON é usado como payload MQTT para o dashboard.
 
 Pinagem configurada para o módulo microSD SPI:
 
-| microSD | ESP32-C3 |
+| microSD | ESP32-S3 |
 |---|---|
 | `3v3` | `3V3` |
 | `GND` | `GND` |
@@ -205,7 +205,7 @@ Pinagem configurada para o módulo microSD SPI:
 | `MISO` | `GPIO5` |
 
 O botão de páginas do LCD foi movido para `GPIO10` para deixar o microSD nos
-pinos SPI padrão do ESP32-C3.
+pinos SPI padrão definidos neste alvo ESP32-S3.
 
 Os pinos ficam em `firmware/gateway/platformio.ini`:
 
@@ -222,13 +222,13 @@ Compilar o gateway com LCD direto e microSD:
 
 ```sh
 cd firmware/gateway
-pio run -e esp32-c3-gateway-lcd-direct
+pio run -e esp32-s3-gateway-lcd-direct
 ```
 
 Fazer upload:
 
 ```sh
-pio run -e esp32-c3-gateway-lcd-direct -t upload
+pio run -e esp32-s3-gateway-lcd-direct -t upload
 ```
 
 Se o cartão não inicializar, o firmware continua lendo o BMS e atualizando o
@@ -236,7 +236,7 @@ LCD; o erro aparece no monitor serial com prefixo `[SD]`.
 
 ### Dashboard remoto por MQTT
 
-O mesmo ambiente `esp32-c3-gateway-lcd-direct` tambem pode publicar cada leitura
+O mesmo ambiente `esp32-s3-gateway-lcd-direct` tambem pode publicar cada leitura
 em MQTT. A conexao WiFi usa WiFiManager: na primeira configuracao, ou se nao
 houver credenciais salvas, o ESP abre o portal `Solmar-BMS-Setup` por ate 120
 segundos. Se o WiFi nao for configurado, a leitura RS485, o LCD e o microSD

@@ -5,25 +5,25 @@ dados em informação para o usuário local e para a equipe remota.
 
 Este projeto tem dois ambientes principais neste diretório:
 
-- `esp32-c3-gateway`: lê a BMS e transmite um resumo por ESP-NOW para um LCD em
-  outra placa ESP32-C3.
-- `esp32-c3-gateway-lcd-direct`: lê a BMS, atualiza um LCD conectado na mesma
+- `esp32-s3-gateway`: lê a BMS e transmite um resumo por ESP-NOW para um LCD em
+  outra placa ESP32-S3.
+- `esp32-s3-gateway-lcd-direct`: lê a BMS, atualiza um LCD conectado na mesma
   placa, grava JSON Lines no microSD e publica MQTT para o dashboard.
 
 ESP-NOW é uma opção de transporte local para separar a placa do gateway da
 placa do LCD. O objetivo maior do firmware é servir como gateway entre a BMS e
 as interfaces de uso do projeto.
 
-Compilar o gateway ESP32-C3 com saída ESP-NOW:
+Compilar o gateway ESP32-S3 com saída ESP-NOW:
 
 ```sh
-pio run -e esp32-c3-gateway
+pio run -e esp32-s3-gateway
 ```
 
-Fazer upload do gateway ESP32-C3:
+Fazer upload do gateway ESP32-S3:
 
 ```sh
-pio run -e esp32-c3-gateway -t upload
+pio run -e esp32-s3-gateway -t upload
 ```
 
 Se mais de uma placa estiver conectada, liste as portas e escolha uma
@@ -31,7 +31,7 @@ explicitamente:
 
 ```sh
 pio device list
-pio run -e esp32-c3-gateway -t upload --upload-port COM5
+pio run -e esp32-s3-gateway -t upload --upload-port COM5
 ```
 
 Abrir o monitor serial:
@@ -42,7 +42,7 @@ pio device monitor -b 9600
 
 ## Modo direto RS485 -> LCD 16x2 -> MQTT
 
-O ambiente `esp32-c3-gateway-lcd-direct` le a bateria Felicity/Felicity ESS pelo
+O ambiente `esp32-s3-gateway-lcd-direct` le a bateria Felicity/Felicity ESS pelo
 mesmo barramento RS485 do gateway, mas nao usa ESP-NOW. Os dados sao escritos
 direto no LCD I2C 16x2, gravados no microSD e publicados em MQTT para o
 dashboard remoto.
@@ -50,24 +50,24 @@ dashboard remoto.
 Compilar:
 
 ```sh
-pio run -e esp32-c3-gateway-lcd-direct
+pio run -e esp32-s3-gateway-lcd-direct
 ```
 
 Fazer upload:
 
 ```sh
-pio run -e esp32-c3-gateway-lcd-direct -t upload
+pio run -e esp32-s3-gateway-lcd-direct -t upload
 ```
 
 Se precisar escolher a porta:
 
 ```sh
-pio run -e esp32-c3-gateway-lcd-direct -t upload --upload-port COM5
+pio run -e esp32-s3-gateway-lcd-direct -t upload --upload-port COM5
 ```
 
-Ligacoes padrao do ESP32-C3 neste alvo:
+Ligacoes padrao do ESP32-S3 neste alvo:
 
-| Funcao | ESP32-C3 |
+| Funcao | ESP32-S3 |
 | --- | --- |
 | RS485 RO / RX | GPIO0 |
 | RS485 DI / TX | GPIO2 |
@@ -95,7 +95,7 @@ Compilar o teste unitário do pacote:
 pio test -e espnow-packet-test --without-uploading --without-testing
 ```
 
-Rodar o teste unitário em um ESP32-C3 conectado:
+Rodar o teste unitário em um ESP32-S3 conectado:
 
 ```sh
 pio test -e espnow-packet-test

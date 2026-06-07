@@ -1,11 +1,11 @@
 # LCD local via ESP-NOW
 
-Firmware para usar o LCD local em um segundo ESP32-C3. Ele recebe o broadcast de
+Firmware para usar o LCD local em um segundo ESP32-S3. Ele recebe o broadcast de
 bateria enviado pelo gateway via ESP-NOW e mostra os principais valores em um
 LCD 16x2 I2C para quem esta perto do barco.
 
 Esta é uma das topologias possíveis do projeto. Quando o LCD fica conectado na
-mesma placa que lê o RS485, use o ambiente `esp32-c3-gateway-lcd-direct`.
+mesma placa que lê o RS485, use o ambiente `esp32-s3-gateway-lcd-direct`.
 
 Ligação padrão:
 
@@ -36,9 +36,9 @@ Leitura do LCD:
 - O botão de página deve ligar `GPIO4` ao `GND`; o firmware usa `INPUT_PULLUP`,
   interrupção por mudança de estado e debounce não bloqueante no estilo da
   `EasyButtonAtInt01`.
-- O LCD usa `Wire.setPins()` no ESP32-C3 para manter SDA/SCL configuráveis. A
+- O LCD usa `Wire.setPins()` no ESP32-S3 para manter SDA/SCL configuráveis. A
   `SoftI2CMaster` é suportada pelo adapter da `LCDBigNumbers` em AVR, mas não é
-  ativada neste alvo ESP32-C3.
+  ativada neste alvo ESP32-S3.
 
 Se o LCD acender mas não mostrar texto, tente trocar `LCD_I2C_ADDR` para
 `0x3F`. O canal ESP-NOW precisa ser igual ao `ESP_NOW_WIFI_CHANNEL` do firmware
@@ -48,16 +48,16 @@ transmissor. O formato binário do pacote é compartilhado por
 Compilar e fazer upload:
 
 ```sh
-pio run -e esp32-c3-lcd-receiver
-pio run -e esp32-c3-lcd-receiver -t upload
+pio run -e esp32-s3-lcd-receiver
+pio run -e esp32-s3-lcd-receiver -t upload
 pio device monitor -b 115200
 ```
 
 Teste local das telas do LCD, sem depender do gateway ESP-NOW:
 
 ```sh
-pio run -e esp32-c3-lcd-pages-test
-pio run -e esp32-c3-lcd-pages-test -t upload
+pio run -e esp32-s3-lcd-pages-test
+pio run -e esp32-s3-lcd-pages-test -t upload
 pio device monitor -b 115200
 ```
 
@@ -73,7 +73,7 @@ pio device list
 Depois faça upload explicitamente para a porta do receptor:
 
 ```sh
-pio run -e esp32-c3-lcd-receiver -t upload --upload-port COM6
+pio run -e esp32-s3-lcd-receiver -t upload --upload-port COM6
 ```
 
 Se o display continuar mostrando `Sem dados`, confirme que transmissor e
