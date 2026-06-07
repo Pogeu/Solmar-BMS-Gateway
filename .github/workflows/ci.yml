@@ -28,6 +28,14 @@ jobs:
         working-directory: firmware/gateway
         run: pio run -e esp32-s3-gateway
 
+      - name: Build direct gateway display firmware
+        working-directory: firmware/gateway
+        run: pio run -e esp32-s3-gateway-lcd-direct
+
+      - name: Build direct gateway display test firmware
+        working-directory: firmware/gateway
+        run: pio run -e esp32-s3-gateway-display-test
+
       - name: Compile gateway unit tests
         working-directory: firmware/gateway
         run: pio test -e espnow-packet-test --without-uploading --without-testing

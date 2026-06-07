@@ -5,9 +5,9 @@ dados em informação para o usuário local e para a equipe remota.
 
 Este projeto tem dois ambientes principais neste diretório:
 
-- `esp32-s3-gateway`: lê a BMS e transmite um resumo por ESP-NOW para um LCD em
+- `esp32-s3-gateway`: lê a BMS e transmite um resumo por ESP-NOW para um display em
   outra placa ESP32-S3.
-- `esp32-s3-gateway-lcd-direct`: lê a BMS, atualiza um LCD conectado na mesma
+- `esp32-s3-gateway-lcd-direct`: lê a BMS, atualiza um display conectado na mesma
   placa, grava JSON Lines no microSD e publica MQTT para o dashboard.
 
 ESP-NOW é uma opção de transporte local para separar a placa do gateway da
@@ -40,11 +40,11 @@ Abrir o monitor serial:
 pio device monitor -b 9600
 ```
 
-## Modo direto RS485 -> LCD 16x2 -> MQTT
+## Modo direto RS485 -> display 128x64 SPI -> MQTT
 
 O ambiente `esp32-s3-gateway-lcd-direct` le a bateria Felicity/Felicity ESS pelo
 mesmo barramento RS485 do gateway, mas nao usa ESP-NOW. Os dados sao escritos
-direto no LCD I2C 16x2, gravados no microSD e publicados em MQTT para o
+direto no display grafico ST7565 128x64, gravados no microSD e publicados em MQTT para o
 dashboard remoto.
 
 Compilar:
@@ -72,22 +72,52 @@ Ligacoes padrao do ESP32-S3 neste alvo:
 | RS485 RO / RX | GPIO0 |
 | RS485 DI / TX | GPIO2 |
 | RS485 DE + RE | GPIO1 |
-| LCD SDA | GPIO8 |
-| LCD SCL | GPIO9 |
-| Botao de pagina | GPIO4 para GND |
+| Display SCL / SPI SCK | GPIO18 |
+| Display SI / SPI MOSI | GPIO23 |
+| Display CS | GPIO15 |
+| Display RS / DC | GPIO16 |
+| Display RSE / RESET | GPIO17 |
+| Botao de pagina | GPIO10 para GND |
 
-O LCD usa endereco I2C `0x27` por padrao. Se o seu modulo estiver em outro
-endereco, ajuste `LCD_I2C_ADDR` no `platformio.ini`.
+Os pinos auxiliares `IC_SCL`, `IC_CS`, `IC_SO` e `IC_SI` do modulo grafico nao
+entram na comunicacao principal do firmware.
 
 Paginas do botao:
 
 | Pagina | Conteudo |
 | --- | --- |
-| 0 | SOC e potencia em numeros grandes |
+| 0 | SOC e potencia com destaque + barra de progresso |
 | 1 | Tensao, corrente, potencia e SOC |
 | 2 | Comparacao SOC BMS x estimativa LiFePO4 por tensao |
 | 3 | Temperatura e status de carga/descarga |
 | 4 | Falhas, min/max das celulas e idade do ultimo pacote |
+
+## Teste local das telas
+
+Existe um ambiente separado para testar o display sem bateria ligada. Ele
+simula mensagens `BmsMessage` com variacao de tensao, corrente, SOC,
+temperatura e falhas para exercitar as cinco paginas do display.
+
+Compilar:
+
+```sh
+pio run -e esp32-s3-gateway-display-test
+```
+
+Fazer upload:
+
+```sh
+pio run -e esp32-s3-gateway-display-test -t upload
+```
+
+Abrir o monitor serial:
+
+```sh
+pio device monitor -b 9600
+```
+
+Nesse modo o firmware nao inicia RS485, microSD nem MQTT. O botao de pagina em
+`GPIO10` continua ativo e o monitor serial imprime os valores simulados.
 
 Compilar o teste unitário do pacote:
 

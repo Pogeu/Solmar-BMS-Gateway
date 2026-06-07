@@ -4,10 +4,8 @@
 #include <Arduino.h>
 
 #if BMS_LCD_DIRECT_MODE
-#include <Wire.h>
-
-#define USE_SERIAL_1602_LCD
-#include <LCDBigNumbers.hpp>
+#include <SPI.h>
+#include <U8g2lib.h>
 #else
 #include "espnow_battery.h"
 #endif
@@ -17,41 +15,60 @@
 #include "felicity.h"
 #include "main.h"
 
+#ifndef BMS_DISPLAY_STANDALONE_TEST
+#define BMS_DISPLAY_STANDALONE_TEST 0
+#endif
+
 #if BMS_LCD_DIRECT_MODE
-#ifndef LCD_I2C_ADDR
-#define LCD_I2C_ADDR 0x27
+#ifndef DISPLAY_SPI_SCK_PIN
+#define DISPLAY_SPI_SCK_PIN 18
 #endif
 
-#ifndef LCD_COLUMNS
-#define LCD_COLUMNS 16
+#ifndef DISPLAY_SPI_MOSI_PIN
+#define DISPLAY_SPI_MOSI_PIN 23
 #endif
 
-#ifndef LCD_SDA_PIN
-#define LCD_SDA_PIN 8
+#ifndef DISPLAY_CS_PIN
+#define DISPLAY_CS_PIN 15
 #endif
 
-#ifndef LCD_SCL_PIN
-#define LCD_SCL_PIN 9
+#ifndef DISPLAY_DC_PIN
+#define DISPLAY_DC_PIN 16
 #endif
 
-#ifndef LCD_PAGE_BUTTON_PIN
-#define LCD_PAGE_BUTTON_PIN 4
+#ifndef DISPLAY_RESET_PIN
+#define DISPLAY_RESET_PIN 17
 #endif
 
-#ifndef LCD_BUTTON_DEBOUNCE_MS
-#define LCD_BUTTON_DEBOUNCE_MS 80
+#ifndef DISPLAY_PAGE_BUTTON_PIN
+#define DISPLAY_PAGE_BUTTON_PIN 4
 #endif
 
-constexpr uint32_t LCD_REFRESH_INTERVAL_MS = 500;
-constexpr uint32_t LCD_BATTERY_STALE_AFTER_MS = 10000;
-constexpr uint8_t LCD_PAGE_COUNT = 5;
+#ifndef DISPLAY_BUTTON_DEBOUNCE_MS
+#define DISPLAY_BUTTON_DEBOUNCE_MS 80
+#endif
+
+constexpr uint32_t DISPLAY_REFRESH_INTERVAL_MS = 500;
+constexpr uint32_t DISPLAY_BATTERY_STALE_AFTER_MS = 10000;
+constexpr uint8_t DISPLAY_PAGE_COUNT = 5;
+constexpr uint8_t DISPLAY_WIDTH = 128;
+constexpr uint8_t DISPLAY_BAR_X = 6;
+constexpr uint8_t DISPLAY_BAR_Y = 52;
+constexpr uint8_t DISPLAY_BAR_WIDTH = 116;
+constexpr uint8_t DISPLAY_BAR_HEIGHT = 8;
+
+#if BMS_DISPLAY_STANDALONE_TEST
+constexpr uint32_t DEMO_BMS_UPDATE_INTERVAL_MS = 1000;
+uint32_t demoBmsUpdateMs = 0;
+uint32_t demoBmsSequence = 0;
+#endif
 
 struct VoltageSocPoint {
   float voltage;
   uint8_t socPercent;
 };
 
-struct DirectLcdState {
+struct DirectDisplayState {
   BmsMessage battery = {};
   BmsMessage cells = {};
   bool hasBattery = false;
@@ -59,18 +76,19 @@ struct DirectLcdState {
   uint32_t batteryAtMs = 0;
 };
 
-LiquidCrystal_I2C lcd(LCD_I2C_ADDR, LCD_COLUMNS, LCD_ROWS);
-LCDBigNumbers bigNumberLCD(&lcd, BIG_NUMBERS_FONT_2_COLUMN_2_ROWS_VARIANT_1);
+U8G2_ST7565_ERC12864_F_4W_SW_SPI display(
+    U8G2_R0,
+    DISPLAY_SPI_SCK_PIN,
+    DISPLAY_SPI_MOSI_PIN,
+    DISPLAY_CS_PIN,
+    DISPLAY_DC_PIN,
+    DISPLAY_RESET_PIN);
 
-DirectLcdState lcdState;
-char displayedLines[LCD_ROWS][LCD_COLUMNS + 1] = {};
-char displayedMainSoc[4] = {};
-char displayedMainPower[5] = {};
-char displayedMainPowerUnit = '\0';
-bool displayedMainStale = false;
-bool mainPageRendered = false;
-uint32_t latestLcdUpdateMs = 0;
-uint8_t lcdPage = 0;
+DirectDisplayState displayState;
+uint32_t latestDisplayUpdateMs = 0;
+uint8_t displayPage = 0;
+
+static void printSerialMessage(const BmsMessage &msg);
 
 volatile bool pageButtonInterruptSeen = false;
 bool pageButtonStableState = HIGH;
@@ -96,42 +114,68 @@ static void IRAM_ATTR onPageButtonInterrupt()
   pageButtonInterruptSeen = true;
 }
 
-static void clearDisplayedLines()
+static const char *powerUnitText(char unit)
 {
-  memset(displayedLines, 0, sizeof(displayedLines));
-  memset(displayedMainSoc, 0, sizeof(displayedMainSoc));
-  memset(displayedMainPower, 0, sizeof(displayedMainPower));
-  displayedMainPowerUnit = '\0';
-  displayedMainStale = false;
-  mainPageRendered = false;
+  return unit == 'k' ? "kW" : "W";
 }
 
-static void lcdPrintLine(uint8_t row, const char *text)
+static void formatPageStatus(char *text, size_t textSize, uint8_t pageIndex, bool stale)
 {
-  if (row >= LCD_ROWS) {
-    return;
-  }
-
-  char padded[LCD_COLUMNS + 1];
-  size_t len = strnlen(text, LCD_COLUMNS);
-
-  memset(padded, ' ', LCD_COLUMNS);
-  memcpy(padded, text, len);
-  padded[LCD_COLUMNS] = '\0';
-
-  if (strncmp(displayedLines[row], padded, LCD_COLUMNS) == 0) {
-    return;
-  }
-
-  lcd.setCursor(0, row);
-  lcd.print(padded);
-  memcpy(displayedLines[row], padded, LCD_COLUMNS + 1);
+  snprintf(text, textSize, stale ? "OLD %u/%u" : "%u/%u",
+           (unsigned)(pageIndex + 1),
+           (unsigned)DISPLAY_PAGE_COUNT);
 }
 
-static void lcdClear()
+static void drawHeader(const char *title, const char *status)
 {
-  lcd.clear();
-  clearDisplayedLines();
+  display.setFont(u8g2_font_6x10_tf);
+  display.drawStr(0, 8, title);
+
+  if (status != nullptr && status[0] != '\0') {
+    int16_t statusX = DISPLAY_WIDTH - (int16_t)display.getStrWidth(status);
+    display.drawStr(statusX > 0 ? statusX : 0, 8, status);
+  }
+
+  display.drawHLine(0, 10, DISPLAY_WIDTH);
+}
+
+static void drawProgressBar(uint8_t percent)
+{
+  uint8_t cappedPercent = percent > 100 ? 100 : percent;
+  uint8_t fillWidth = (uint8_t)(((DISPLAY_BAR_WIDTH - 2) * cappedPercent) / 100);
+
+  display.drawFrame(DISPLAY_BAR_X, DISPLAY_BAR_Y, DISPLAY_BAR_WIDTH, DISPLAY_BAR_HEIGHT);
+
+  if (fillWidth > 0) {
+    display.drawBox(DISPLAY_BAR_X + 1, DISPLAY_BAR_Y + 1, fillWidth, DISPLAY_BAR_HEIGHT - 2);
+  }
+}
+
+static void showTextPage(const char *title,
+                         const char *status,
+                         const char *line0,
+                         const char *line1,
+                         const char *line2,
+                         const char *line3)
+{
+  display.clearBuffer();
+  drawHeader(title, status);
+  display.setFont(u8g2_font_6x10_tf);
+
+  if (line0 != nullptr && line0[0] != '\0') {
+    display.drawStr(0, 22, line0);
+  }
+  if (line1 != nullptr && line1[0] != '\0') {
+    display.drawStr(0, 34, line1);
+  }
+  if (line2 != nullptr && line2[0] != '\0') {
+    display.drawStr(0, 46, line2);
+  }
+  if (line3 != nullptr && line3[0] != '\0') {
+    display.drawStr(0, 58, line3);
+  }
+
+  display.sendBuffer();
 }
 
 static const char *onOffText(bool enabled)
@@ -246,26 +290,16 @@ static uint16_t faultFlagsFromBatteryInfo(const BmsMessage &msg)
   return flags;
 }
 
-static void setupDisplayBus()
-{
-#if defined(ARDUINO_ARCH_ESP32)
-  Wire.setPins(LCD_SDA_PIN, LCD_SCL_PIN);
-#else
-  Wire.begin(LCD_SDA_PIN, LCD_SCL_PIN);
-#endif
-}
-
 static void setupPageButton()
 {
-  pinMode(LCD_PAGE_BUTTON_PIN, INPUT_PULLUP);
-  pageButtonStableState = digitalRead(LCD_PAGE_BUTTON_PIN);
-  attachInterrupt(digitalPinToInterrupt(LCD_PAGE_BUTTON_PIN), onPageButtonInterrupt, CHANGE);
+  pinMode(DISPLAY_PAGE_BUTTON_PIN, INPUT_PULLUP);
+  pageButtonStableState = digitalRead(DISPLAY_PAGE_BUTTON_PIN);
+  attachInterrupt(digitalPinToInterrupt(DISPLAY_PAGE_BUTTON_PIN), onPageButtonInterrupt, CHANGE);
 }
 
-static void forceLcdRefresh()
+static void forceDisplayRefresh()
 {
-  latestLcdUpdateMs = 0;
-  lcdClear();
+  latestDisplayUpdateMs = 0;
 }
 
 static void pollPageButton()
@@ -278,10 +312,10 @@ static void pollPageButton()
   pageButtonInterruptSeen = false;
   interrupts();
 
-  bool reading = digitalRead(LCD_PAGE_BUTTON_PIN);
+  bool reading = digitalRead(DISPLAY_PAGE_BUTTON_PIN);
   uint32_t now = millis();
 
-  if (now - pageButtonLastChangeMs < LCD_BUTTON_DEBOUNCE_MS) {
+  if (now - pageButtonLastChangeMs < DISPLAY_BUTTON_DEBOUNCE_MS) {
     return;
   }
 
@@ -293,188 +327,313 @@ static void pollPageButton()
   pageButtonLastChangeMs = now;
 
   if (pageButtonStableState == LOW) {
-    lcdPage = (lcdPage + 1) % LCD_PAGE_COUNT;
-    forceLcdRefresh();
+    displayPage = (displayPage + 1) % DISPLAY_PAGE_COUNT;
+    forceDisplayRefresh();
   }
 }
 
-static void setupDirectLcd()
+static void setupDirectDisplay()
 {
-  setupDisplayBus();
+  display.begin();
   setupPageButton();
-  lcd.init();
-  lcd.backlight();
-  bigNumberLCD.begin();
-  bigNumberLCD.disableGapBetweenNumbers();
-  lcdPrintLine(0, "BMS LCD direto");
-  lcdPrintLine(1, "Aguardando BMS");
+  showTextPage("BMS direto", "SPI", "Display 128x64", "ST7565 pronto", "Aguardando BMS", "");
 }
 
-static void handleDirectLcdMessage(const BmsMessage &msg)
+static void handleDirectDisplayMessage(const BmsMessage &msg)
 {
   if (msg.type == BMS_TYPE_BATTERY_INFO) {
-    lcdState.battery = msg;
-    lcdState.hasBattery = true;
-    lcdState.batteryAtMs = millis();
+    displayState.battery = msg;
+    displayState.hasBattery = true;
+    displayState.batteryAtMs = millis();
   } else if (msg.type == BMS_TYPE_CELL_VOLTAGES) {
-    lcdState.cells = msg;
-    lcdState.hasCells = true;
+    displayState.cells = msg;
+    displayState.hasCells = true;
   }
 }
+
+#if BMS_DISPLAY_STANDALONE_TEST
+static BmsMessage makeDemoBatteryMessage(uint32_t sequence)
+{
+  BmsMessage msg = {};
+  uint8_t phase = sequence % 24;
+
+  msg.deviceId = 1;
+  msg.type = BMS_TYPE_BATTERY_INFO;
+  msg.payload.batteryInfo.batteryChargeEnable = phase < 16;
+  msg.payload.batteryInfo.batteryChargeImmediately = phase < 4;
+  msg.payload.batteryInfo.batteryDischargeEnable = phase != 20;
+  msg.payload.batteryInfo.batteryTemperatureValid = phase != 11;
+  msg.payload.batteryInfo.faultCellVoltageHigh = (phase == 18);
+  msg.payload.batteryInfo.faultCellVoltageLow = (phase == 20);
+  msg.payload.batteryInfo.faultChargeCurrentHigh = (phase == 19);
+  msg.payload.batteryInfo.faultDischargeCurrentHigh = (phase == 21);
+  msg.payload.batteryInfo.faultBMSTemperatureHigh = (phase == 22);
+  msg.payload.batteryInfo.faultCellTemperatureHigh = (phase == 23);
+  msg.payload.batteryInfo.faultCellTemperatureLow = (phase == 17);
+
+  if (phase < 12) {
+    msg.payload.batteryInfo.voltage = 52.1f + phase * 0.16f;
+    msg.payload.batteryInfo.current = 6.0f + phase * 0.35f;
+    msg.payload.batteryInfo.soc = 42 + phase * 3;
+  } else {
+    uint8_t dischargePhase = phase - 12;
+    msg.payload.batteryInfo.voltage = 54.0f - dischargePhase * 0.18f;
+    msg.payload.batteryInfo.current = -4.5f - dischargePhase * 0.45f;
+    msg.payload.batteryInfo.soc = 78 - dischargePhase * 3;
+  }
+
+  msg.payload.batteryInfo.packPowerW =
+      msg.payload.batteryInfo.voltage * msg.payload.batteryInfo.current;
+  msg.payload.batteryInfo.tempC = 24.0f + (phase % 6) * 1.4f;
+
+  return msg;
+}
+
+static BmsMessage makeDemoCellMessage(uint32_t sequence, float packVoltage)
+{
+  BmsMessage msg = {};
+  float cellBase = packVoltage / 16.0f;
+  float minV = 99.0f;
+  float maxV = 0.0f;
+  float sumV = 0.0f;
+  float minTemp = 999.0f;
+  float maxTemp = -999.0f;
+  float sumTemp = 0.0f;
+
+  msg.deviceId = 1;
+  msg.type = BMS_TYPE_CELL_VOLTAGES;
+  msg.payload.cellInfo.validCellCount = 16;
+  msg.payload.cellInfo.validTemperatureCount = 4;
+  msg.payload.cellInfo.cellsTempsRegsRead = 10;
+
+  for (uint8_t i = 0; i < msg.payload.cellInfo.validCellCount; i++) {
+    int8_t offsetIndex = (int8_t)((sequence + i) % 5) - 2;
+    float cellV = cellBase + offsetIndex * 0.004f;
+
+    if ((sequence % 24) == 20 && i == 0) {
+      cellV -= 0.030f;
+    }
+
+    msg.payload.cellInfo.cellVoltages[i] = cellV;
+    sumV += cellV;
+    if (cellV < minV) {
+      minV = cellV;
+    }
+    if (cellV > maxV) {
+      maxV = cellV;
+    }
+  }
+
+  for (uint8_t i = 0; i < msg.payload.cellInfo.validTemperatureCount; i++) {
+    float cellTemp = 23.0f + ((sequence + i) % 6) * 1.5f;
+
+    if ((sequence % 24) == 23 && i == 3) {
+      cellTemp += 6.0f;
+    }
+
+    msg.payload.cellInfo.cellTemperatures[i] = cellTemp;
+    sumTemp += cellTemp;
+    if (cellTemp < minTemp) {
+      minTemp = cellTemp;
+    }
+    if (cellTemp > maxTemp) {
+      maxTemp = cellTemp;
+    }
+  }
+
+  msg.payload.cellInfo.cellMinV = minV;
+  msg.payload.cellInfo.cellMaxV = maxV;
+  msg.payload.cellInfo.cellAvgV = sumV / msg.payload.cellInfo.validCellCount;
+  msg.payload.cellInfo.cellSumV = sumV;
+  msg.payload.cellInfo.cellDeltaMv = (maxV - minV) * 1000.0f;
+  msg.payload.cellInfo.tempMinC = minTemp;
+  msg.payload.cellInfo.tempMaxC = maxTemp;
+  msg.payload.cellInfo.tempAvgC = sumTemp / msg.payload.cellInfo.validTemperatureCount;
+  msg.payload.cellInfo.tempDeltaC = maxTemp - minTemp;
+
+  return msg;
+}
+
+static void updateDemoBmsMessages()
+{
+  uint32_t now = millis();
+
+  if (displayState.hasBattery && now - demoBmsUpdateMs < DEMO_BMS_UPDATE_INTERVAL_MS) {
+    return;
+  }
+
+  BmsMessage battery = makeDemoBatteryMessage(demoBmsSequence);
+  BmsMessage cells = makeDemoCellMessage(demoBmsSequence, battery.payload.batteryInfo.voltage);
+
+  demoBmsUpdateMs = now;
+  handleDirectDisplayMessage(battery);
+  handleDirectDisplayMessage(cells);
+  printSerialMessage(battery);
+  printSerialMessage(cells);
+  demoBmsSequence++;
+}
+#endif
 
 static void showDirectWaitingPage()
 {
-  lcdPrintLine(0, "BMS LCD direto");
-  lcdPrintLine(1, "Sem dados");
+  showTextPage("BMS direto", "SPI", "Sem dados da BMS", "Confira RS485", "Aguardando leitura", "");
 }
 
 static void showDirectMainPage(const BmsMessage &msg, bool stale)
 {
   char socText[4];
   char powerText[5];
+  char footer[24];
+  char status[12];
   uint16_t socPercent = cappedSocPercent(msg.payload.batteryInfo.soc);
   char powerUnit = formatBigPower(msg.payload.batteryInfo.packPowerW, powerText, sizeof(powerText));
 
-  snprintf(socText, sizeof(socText), "%3u", socPercent);
+  snprintf(socText, sizeof(socText), "%u", socPercent);
+  snprintf(footer, sizeof(footer), "PWR %s %s", powerText, powerUnitText(powerUnit));
+  formatPageStatus(status, sizeof(status), 0, stale);
 
-  if (!mainPageRendered) {
-    lcdClear();
-  }
+  display.clearBuffer();
+  drawHeader("BMS direto", status);
 
-  if (mainPageRendered &&
-      strcmp(displayedMainSoc, socText) == 0 &&
-      strcmp(displayedMainPower, powerText) == 0 &&
-      displayedMainPowerUnit == powerUnit &&
-      displayedMainStale == stale) {
-    return;
-  }
+  display.setFont(u8g2_font_6x10_tf);
+  display.drawStr(0, 22, "SOC");
+  display.drawStr(72, 22, "PWR");
 
-  bigNumberLCD.begin();
-  bigNumberLCD.disableGapBetweenNumbers();
-  bigNumberLCD.setBigNumberCursor(0, 0);
-  bigNumberLCD.print(socText);
-  lcd.setCursor(6, 1);
-  lcd.print(stale ? '!' : '%');
+  display.setFont(u8g2_font_logisoso18_tn);
+  display.drawStr(0, 47, socText);
+  display.drawStr(68, 47, powerText);
 
-  bigNumberLCD.setBigNumberCursor(9, 0);
-  bigNumberLCD.print(powerText);
-  lcd.setCursor(15, 1);
-  lcd.print(powerUnit);
-
-  memcpy(displayedMainSoc, socText, sizeof(displayedMainSoc));
-  memcpy(displayedMainPower, powerText, sizeof(displayedMainPower));
-  displayedMainPowerUnit = powerUnit;
-  displayedMainStale = stale;
-  mainPageRendered = true;
+  display.setFont(u8g2_font_6x10_tf);
+  display.drawStr(44, 46, "%");
+  display.drawStr(110, 46, powerUnitText(powerUnit));
+  drawProgressBar((uint8_t)socPercent);
+  display.drawStr(0, 63, footer);
+  display.sendBuffer();
 }
 
-static void showDirectElectricalPage(const BmsMessage &msg)
+static void showDirectElectricalPage(const BmsMessage &msg, bool stale)
 {
-  char line0[LCD_COLUMNS + 1];
-  char line1[LCD_COLUMNS + 1];
+  char line0[24];
+  char line1[24];
+  char line2[24];
+  char line3[24];
+  char status[12];
   uint16_t socPercent = cappedSocPercent(msg.payload.batteryInfo.soc);
 
-  snprintf(line0, sizeof(line0), "V%5.2f I%5.1f",
-           msg.payload.batteryInfo.voltage,
-           msg.payload.batteryInfo.current);
-  snprintf(line1, sizeof(line1), "P%6ldW S%3u%%",
-           displayWatts(msg.payload.batteryInfo.packPowerW),
-           socPercent);
+  formatPageStatus(status, sizeof(status), 1, stale);
+  snprintf(line0, sizeof(line0), "Volt  %5.2f V", msg.payload.batteryInfo.voltage);
+  snprintf(line1, sizeof(line1), "Corr  %5.1f A", msg.payload.batteryInfo.current);
+  snprintf(line2, sizeof(line2), "Pot   %5ld W", displayWatts(msg.payload.batteryInfo.packPowerW));
+  snprintf(line3, sizeof(line3), "SOC   %3u %%", socPercent);
 
-  lcdPrintLine(0, line0);
-  lcdPrintLine(1, line1);
+  showTextPage("Eletrica", status, line0, line1, line2, line3);
 }
 
-static void showDirectLifepo4Page(const BmsMessage &msg)
+static void showDirectLifepo4Page(const BmsMessage &msg, bool stale)
 {
-  char line0[LCD_COLUMNS + 1];
-  char line1[LCD_COLUMNS + 1];
+  char line0[24];
+  char line1[24];
+  char line2[24];
+  char line3[24];
+  char status[12];
   uint8_t voltageSoc = lifepo4SocFromRestingVoltage(msg.payload.batteryInfo.voltage);
   uint16_t bmsSoc = cappedSocPercent(msg.payload.batteryInfo.soc);
 
-  snprintf(line0, sizeof(line0), "BMS%3u%% Volt%3u%%", bmsSoc, voltageSoc);
-  snprintf(line1, sizeof(line1), "48V OCV %5.2f", msg.payload.batteryInfo.voltage);
+  formatPageStatus(status, sizeof(status), 2, stale);
+  snprintf(line0, sizeof(line0), "BMS SOC %3u %%", bmsSoc);
+  snprintf(line1, sizeof(line1), "VoltSOC %3u %%", voltageSoc);
+  snprintf(line2, sizeof(line2), "Pack    %5.2f V", msg.payload.batteryInfo.voltage);
+  snprintf(line3, sizeof(line3), "OCV so em repouso");
 
-  lcdPrintLine(0, line0);
-  lcdPrintLine(1, line1);
+  showTextPage("SOC 48V", status, line0, line1, line2, line3);
 }
 
-static void showDirectStatusPage(const BmsMessage &msg)
+static void showDirectStatusPage(const BmsMessage &msg, bool stale)
 {
-  char line0[LCD_COLUMNS + 1];
-  char line1[LCD_COLUMNS + 1];
+  char line0[24];
+  char line1[24];
+  char line2[24];
+  char line3[24];
+  char status[12];
 
+  formatPageStatus(status, sizeof(status), 3, stale);
+
+  snprintf(line0, sizeof(line0), "BMS ID %u", msg.deviceId);
   if (msg.payload.batteryInfo.batteryTemperatureValid) {
-    snprintf(line0, sizeof(line0), "B%u Temp %4.1fC",
-             msg.deviceId,
-             msg.payload.batteryInfo.tempC);
+    snprintf(line1, sizeof(line1), "Temp   %4.1f C", msg.payload.batteryInfo.tempC);
   } else {
-    snprintf(line0, sizeof(line0), "B%u Temp inval", msg.deviceId);
+    snprintf(line1, sizeof(line1), "Temp   invalida");
   }
 
-  snprintf(line1, sizeof(line1), "C:%-3s D:%-3s",
-           onOffText(msg.payload.batteryInfo.batteryChargeEnable),
-           onOffText(msg.payload.batteryInfo.batteryDischargeEnable));
+  snprintf(line2, sizeof(line2), "Charge %s", onOffText(msg.payload.batteryInfo.batteryChargeEnable));
+  snprintf(line3, sizeof(line3), "Dischg %s", onOffText(msg.payload.batteryInfo.batteryDischargeEnable));
 
-  lcdPrintLine(0, line0);
-  lcdPrintLine(1, line1);
+  showTextPage("Status", status, line0, line1, line2, line3);
 }
 
 static void showDirectCellsFaultPage(uint32_t ageMs, bool stale)
 {
-  char line0[LCD_COLUMNS + 1];
-  char line1[LCD_COLUMNS + 1];
-  uint16_t faultFlags = faultFlagsFromBatteryInfo(lcdState.battery);
+  char line0[24];
+  char line1[24];
+  char line2[24];
+  char line3[24];
+  char status[12];
+  uint16_t faultFlags = faultFlagsFromBatteryInfo(displayState.battery);
+
+  formatPageStatus(status, sizeof(status), 4, stale);
 
   if (faultFlags != 0) {
-    snprintf(line0, sizeof(line0), "FALHA 0x%04X", faultFlags);
-  } else if (lcdState.hasCells) {
-    snprintf(line0, sizeof(line0), "Cel %4.3f-%4.3f",
-             lcdState.cells.payload.cellInfo.cellMinV,
-             lcdState.cells.payload.cellInfo.cellMaxV);
+    snprintf(line0, sizeof(line0), "Falha 0x%04X", faultFlags);
   } else {
     snprintf(line0, sizeof(line0), "Sem falhas");
   }
 
-  snprintf(line1, sizeof(line1), "Link %s %3lus",
+  if (displayState.hasCells) {
+    snprintf(line1, sizeof(line1), "Cell min %4.3fV", displayState.cells.payload.cellInfo.cellMinV);
+    snprintf(line2, sizeof(line2), "Cell max %4.3fV", displayState.cells.payload.cellInfo.cellMaxV);
+  } else {
+    snprintf(line1, sizeof(line1), "Sem dados de cel");
+    line2[0] = '\0';
+  }
+
+  snprintf(line3, sizeof(line3), "Link %s %3lus",
            stale ? "OLD" : "OK ",
            (unsigned long)cappedAgeSeconds(ageMs));
 
-  lcdPrintLine(0, line0);
-  lcdPrintLine(1, line1);
+  showTextPage("Falhas", status, line0, line1, line2, line3);
 }
 
-static void updateDirectLcd()
+static void updateDirectDisplay()
 {
-  if (millis() - latestLcdUpdateMs < LCD_REFRESH_INTERVAL_MS) {
+  if (millis() - latestDisplayUpdateMs < DISPLAY_REFRESH_INTERVAL_MS) {
     return;
   }
 
-  latestLcdUpdateMs = millis();
+  latestDisplayUpdateMs = millis();
 
-  if (!lcdState.hasBattery) {
+  if (!displayState.hasBattery) {
     showDirectWaitingPage();
     return;
   }
 
-  uint32_t ageMs = millis() - lcdState.batteryAtMs;
-  bool stale = ageMs > LCD_BATTERY_STALE_AFTER_MS;
+  uint32_t ageMs = millis() - displayState.batteryAtMs;
+  bool stale = ageMs > DISPLAY_BATTERY_STALE_AFTER_MS;
 
-  switch (lcdPage) {
+  switch (displayPage) {
     case 0:
-      showDirectMainPage(lcdState.battery, stale);
+      showDirectMainPage(displayState.battery, stale);
       break;
 
     case 1:
-      showDirectElectricalPage(lcdState.battery);
+      showDirectElectricalPage(displayState.battery, stale);
       break;
 
     case 2:
-      showDirectLifepo4Page(lcdState.battery);
+      showDirectLifepo4Page(displayState.battery, stale);
       break;
 
     case 3:
-      showDirectStatusPage(lcdState.battery);
+      showDirectStatusPage(displayState.battery, stale);
       break;
 
     default:
@@ -592,13 +751,18 @@ void setup()
   Serial.println("Starting up...");
 
 #if BMS_LCD_DIRECT_MODE
-  Serial.println("Gateway mode: RS485 input, direct LCD output.");
+  Serial.println("Gateway mode: RS485 input, direct display output.");
   Serial.println("ESP-NOW is disabled in this firmware.");
 
-  setupDirectLcd();
+  setupDirectDisplay();
+#if BMS_DISPLAY_STANDALONE_TEST
+  Serial.println("Standalone display test: simulating BMS data.");
+  showTextPage("Teste BMS", "SPI", "Simulando bateria", "Sem RS485 real", "Botao troca pag", "");
+#else
   bmsSdLoggerBegin();
   startBmsTasks(RS485_RX_PIN, RS485_TX_PIN, RS485_DE_PIN, RS485_RE_PIN, BMS_BATTERY_COUNT);
   bmsMqttPublisherBegin();
+#endif
 #else
   Serial.println("Gateway mode: RS485 input, ESP-NOW output.");
   Serial.println("MQTT/WiFi publishing is disabled in this firmware.");
@@ -617,17 +781,23 @@ void loop()
 #if BMS_LCD_DIRECT_MODE
   pollPageButton();
 
+#if BMS_DISPLAY_STANDALONE_TEST
+  updateDemoBmsMessages();
+  updateDirectDisplay();
+  delay(10);
+#else
   BmsMessage msg;
   while (bmsQueue != nullptr && xQueueReceive(bmsQueue, &msg, 0) == pdTRUE) {
-    handleDirectLcdMessage(msg);
+    handleDirectDisplayMessage(msg);
     bmsSdLoggerHandleMessage(msg);
     bmsMqttPublisherHandleMessage(msg);
     printSerialMessage(msg);
   }
 
-  updateDirectLcd();
+  updateDirectDisplay();
   bmsMqttPublisherLoop();
   delay(10);
+#endif
 #else
   delay(1000);
 #endif
