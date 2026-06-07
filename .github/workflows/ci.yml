@@ -26,7 +26,7 @@ jobs:
 
       - name: Build gateway firmware
         working-directory: firmware/gateway
-        run: pio run -e esp32-c3-gateway
+        run: pio run -e esp32-s3-gateway
 
       - name: Compile gateway unit tests
         working-directory: firmware/gateway
@@ -34,4 +34,4 @@ jobs:
 
       - name: Build receiver LCD firmware
         working-directory: firmware/receiver-lcd
-        run: pio run -e esp32-c3-lcd-receiver
+        run: pio run -e esp32-s3-lcd-receiver

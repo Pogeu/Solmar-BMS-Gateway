@@ -35,7 +35,7 @@
 
 #define writeLog(...) Serial.printf(__VA_ARGS__)
 
-// Default wiring is for an ESP32-C3 with RO->GPIO0, RE/DE->GPIO1, DI->GPIO2.
+// Default wiring keeps the same GPIO map on the ESP32-S3: RO->GPIO0, RE/DE->GPIO1, DI->GPIO2.
 #ifndef RS485_RX_PIN
 #define RS485_RX_PIN 0
 #endif
