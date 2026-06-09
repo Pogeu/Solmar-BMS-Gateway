@@ -48,6 +48,10 @@
 #define DISPLAY_BUTTON_DEBOUNCE_MS 80
 #endif
 
+#ifndef DISPLAY_CONTRAST
+#define DISPLAY_CONTRAST -1
+#endif
+
 constexpr uint32_t DISPLAY_REFRESH_INTERVAL_MS = 500;
 constexpr uint32_t DISPLAY_BATTERY_STALE_AFTER_MS = 10000;
 constexpr uint8_t DISPLAY_PAGE_COUNT = 5;
@@ -335,6 +339,9 @@ static void pollPageButton()
 static void setupDirectDisplay()
 {
   display.begin();
+#if DISPLAY_CONTRAST >= 0
+  display.setContrast(DISPLAY_CONTRAST);
+#endif
   setupPageButton();
   showTextPage("BMS direto", "SPI", "Display 128x64", "ST7565 pronto", "Aguardando BMS", "");
 }
@@ -755,6 +762,9 @@ void setup()
   Serial.println("ESP-NOW is disabled in this firmware.");
 
   setupDirectDisplay();
+#if DISPLAY_CONTRAST >= 0
+  Serial.printf("Display contrast = %d\n", DISPLAY_CONTRAST);
+#endif
 #if BMS_DISPLAY_STANDALONE_TEST
   Serial.println("Standalone display test: simulating BMS data.");
   showTextPage("Teste BMS", "SPI", "Simulando bateria", "Sem RS485 real", "Botao troca pag", "");
