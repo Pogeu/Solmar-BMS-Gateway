@@ -72,15 +72,23 @@ Ligacoes padrao do ESP32-S3 neste alvo:
 | RS485 RO / RX | GPIO0 |
 | RS485 DI / TX | GPIO2 |
 | RS485 DE + RE | GPIO1 |
-| Display SCL / SPI SCK | GPIO18 |
-| Display SI / SPI MOSI | GPIO23 |
+| Display SCL / SPI SCK | GPIO4 |
+| Display SI / SPI MOSI | GPIO6 |
 | Display CS | GPIO15 |
 | Display RS / DC | GPIO16 |
 | Display RSE / RESET | GPIO17 |
+| microSD CLK / SPI SCK | GPIO4 |
+| microSD MOSI | GPIO6 |
+| microSD MISO | GPIO5 |
+| microSD CS | GPIO7 |
 | Botao de pagina | GPIO10 para GND |
 
 Os pinos auxiliares `IC_SCL`, `IC_CS`, `IC_SO` e `IC_SI` do modulo grafico nao
 entram na comunicacao principal do firmware.
+
+Display e microSD agora compartilham o mesmo barramento SPI fisico. O display
+usa `SCK` e `MOSI` com `CS` proprio, enquanto o microSD usa os mesmos `SCK` e
+`MOSI`, mais `MISO` e seu proprio `CS`.
 
 Paginas do botao:
 

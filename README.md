@@ -198,8 +198,8 @@ Pinagem configurada para o display ST7565 / GMG12864-06D:
 
 | Display | ESP32-S3 |
 |---|---|
-| `SCL` | `GPIO18` |
-| `SI` | `GPIO23` |
+| `SCL` | `GPIO4` |
+| `SI` | `GPIO6` |
 | `CS` | `GPIO15` |
 | `RS` | `GPIO16` |
 | `RSE` | `GPIO17` |
@@ -221,19 +221,23 @@ Pinagem configurada para o módulo microSD SPI:
 | `CLK` | `GPIO4` |
 | `MISO` | `GPIO5` |
 
-O botão de páginas do display foi movido para `GPIO10` para deixar o microSD nos
-pinos SPI padrão definidos neste alvo ESP32-S3.
+No modo direto, display e microSD compartilham o mesmo barramento SPI físico:
+`CLK/SCL` em `GPIO4` e `MOSI/SI` em `GPIO6`. Cada um fica com seu `CS`
+separado, e só o microSD usa `MISO` em `GPIO5`.
+
+O botão de páginas do display foi movido para `GPIO10` para deixar livre o
+barramento SPI compartilhado.
 
 Os pinos ficam em `firmware/gateway/platformio.ini`:
 
 ```ini
--D DISPLAY_SPI_SCK_PIN=18
--D DISPLAY_SPI_MOSI_PIN=23
+-D DISPLAY_SPI_SCK_PIN=4
+-D DISPLAY_SPI_MOSI_PIN=6
 -D DISPLAY_CS_PIN=15
 -D DISPLAY_DC_PIN=16
 -D DISPLAY_RESET_PIN=17
 -D DISPLAY_PAGE_BUTTON_PIN=10
--D SD_LOG_USE_DEFAULT_SPI_PINS=1
+-D SD_LOG_USE_DEFAULT_SPI_PINS=0
 -D SD_LOG_CS_PIN=7
 -D SD_LOG_SCK_PIN=4
 -D SD_LOG_MISO_PIN=5
