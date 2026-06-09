@@ -56,6 +56,10 @@
 #define DISPLAY_FILLED_PROGRESS_BAR 1
 #endif
 
+#ifndef DISPLAY_USE_ERC12864_ALT
+#define DISPLAY_USE_ERC12864_ALT 0
+#endif
+
 constexpr uint32_t DISPLAY_REFRESH_INTERVAL_MS = 500;
 constexpr uint32_t DISPLAY_BATTERY_STALE_AFTER_MS = 10000;
 constexpr uint8_t DISPLAY_PAGE_COUNT = 5;
@@ -84,6 +88,15 @@ struct DirectDisplayState {
   uint32_t batteryAtMs = 0;
 };
 
+#if DISPLAY_USE_ERC12864_ALT
+U8G2_ST7565_ERC12864_ALT_F_4W_SW_SPI display(
+    U8G2_R0,
+    DISPLAY_SPI_SCK_PIN,
+    DISPLAY_SPI_MOSI_PIN,
+    DISPLAY_CS_PIN,
+    DISPLAY_DC_PIN,
+    DISPLAY_RESET_PIN);
+#else
 U8G2_ST7565_ERC12864_F_4W_SW_SPI display(
     U8G2_R0,
     DISPLAY_SPI_SCK_PIN,
@@ -91,6 +104,7 @@ U8G2_ST7565_ERC12864_F_4W_SW_SPI display(
     DISPLAY_CS_PIN,
     DISPLAY_DC_PIN,
     DISPLAY_RESET_PIN);
+#endif
 
 DirectDisplayState displayState;
 uint32_t latestDisplayUpdateMs = 0;
@@ -775,6 +789,11 @@ void setup()
   setupDirectDisplay();
 #if DISPLAY_CONTRAST >= 0
   Serial.printf("Display contrast = %d\n", DISPLAY_CONTRAST);
+#endif
+#if DISPLAY_USE_ERC12864_ALT
+  Serial.println("Display driver = ERC12864_ALT");
+#else
+  Serial.println("Display driver = ERC12864");
 #endif
 #if BMS_DISPLAY_STANDALONE_TEST
   Serial.println("Standalone display test: simulating BMS data.");
