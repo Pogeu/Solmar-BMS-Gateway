@@ -9,16 +9,23 @@ mesma placa que lê o RS485, use o ambiente `esp32-s3-gateway-lcd-direct`.
 
 Ligação padrão:
 
-- Display VDD -> 3V3 ou 5V, conforme o módulo
-- Display VSS -> GND
-- Display SCL -> GPIO18
-- Display SI -> GPIO23
-- Display CS -> GPIO15
-- Display RS -> GPIO16
-- Display RSE -> GPIO17
-- Backlight A -> VCC
-- Backlight K -> GND
-- Botão de página -> GPIO4 e GND
+| Pin # | Symbol | ESP32-S3 |
+| --- | --- | --- |
+| `1` | `CS` | `GPIO15` |
+| `2` | `RST` | `GPIO17` |
+| `3` | `RS (A0)` | `GPIO16` |
+| `4` | `SCL` | `GPIO18` |
+| `5` | `SI` | `GPIO23` |
+| `6` | `VDD` | `3V3` ou `5V`, conforme o módulo |
+| `7` | `GND` | `GND` |
+| `8` | `LEDA` | `VCC` do backlight |
+| `9` | `LEDK` | `GND` |
+| `10` | `IC_SCK` | `nao usar` |
+| `11` | `IC_CS` | `nao usar` |
+| `12` | `IC_SDO` | `nao usar` |
+| `13` | `IC_SDI` | `nao usar` |
+
+Botão de página: `GPIO4` e `GND`.
 
 Configurações padrão em `platformio.ini`:
 
@@ -40,11 +47,11 @@ Leitura do display:
 - O botão de página deve ligar `GPIO4` ao `GND`; o firmware usa `INPUT_PULLUP`,
   interrupção por mudança de estado e debounce não bloqueante no estilo da
   `EasyButtonAtInt01`.
-- Os pinos `IC_SCL`, `IC_CS`, `IC_SO` e `IC_SI` da placa do display não são
+- Os pinos `IC_SCK`, `IC_CS`, `IC_SDO` e `IC_SDI` da placa do display não são
   usados na comunicação principal.
 
 Se o display acender mas não mostrar texto, revise primeiro a pinagem `SCL`,
-`SI`, `CS`, `RS` e `RSE` e, se necessário, teste outra variante ST7565 da
+`SI`, `CS`, `RS (A0)` e `RST` e, se necessário, teste outra variante ST7565 da
 biblioteca U8g2. O canal ESP-NOW precisa ser igual ao `ESP_NOW_WIFI_CHANNEL` do firmware
 transmissor. O formato binário do pacote é compartilhado por
 `../../shared/espnow_battery_packet.h`.

@@ -196,19 +196,24 @@ JSON é usado como payload MQTT para o dashboard.
 
 Pinagem configurada para o display ST7565 / GMG12864-06D:
 
-| Display | ESP32-S3 |
-|---|---|
-| `SCL` | `GPIO4` |
-| `SI` | `GPIO6` |
-| `CS` | `GPIO15` |
-| `RS` | `GPIO16` |
-| `RSE` | `GPIO17` |
-| `A` | `3V3` ou `VCC` do backlight |
-| `K` | `GND` |
+| Pin # | Symbol | ESP32-S3 |
+|---|---|---|
+| `1` | `CS` | `GPIO15` |
+| `2` | `RST` | `GPIO17` |
+| `3` | `RS (A0)` | `GPIO16` |
+| `4` | `SCL` | `GPIO4` |
+| `5` | `SI` | `GPIO6` |
+| `6` | `VDD` | `3V3` |
+| `7` | `GND` | `GND` |
+| `8` | `LEDA` | `3V3` ou `VCC` do backlight |
+| `9` | `LEDK` | `GND` |
+| `10` | `IC_SCK` | `nao usar` |
+| `11` | `IC_CS` | `nao usar` |
+| `12` | `IC_SDO` | `nao usar` |
+| `13` | `IC_SDI` | `nao usar` |
 
-Os pinos `IC_SCL`, `IC_CS`, `IC_SO` e `IC_SI` da placa do display nao sao
-usados pelo firmware. A comunicacao principal fica somente em `CS`, `RSE`,
-`RS`, `SCL` e `SI`.
+No firmware, a comunicacao principal do display fica somente em `CS`, `RST`,
+`RS (A0)`, `SCL` e `SI`.
 
 Pinagem configurada para o módulo microSD SPI:
 
@@ -221,7 +226,7 @@ Pinagem configurada para o módulo microSD SPI:
 | `CLK` | `GPIO4` |
 | `MISO` | `GPIO5` |
 
-No modo direto, display e microSD compartilham o mesmo barramento SPI físico:
+No modo direto, display e microSD compartilham o mesmo barramento SPI fisico:
 `CLK/SCL` em `GPIO4` e `MOSI/SI` em `GPIO6`. Cada um fica com seu `CS`
 separado, e só o microSD usa `MISO` em `GPIO5`.
 

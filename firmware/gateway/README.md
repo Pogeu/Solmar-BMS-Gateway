@@ -72,22 +72,27 @@ Ligacoes padrao do ESP32-S3 neste alvo:
 | RS485 RO / RX | GPIO0 |
 | RS485 DI / TX | GPIO2 |
 | RS485 DE + RE | GPIO1 |
-| Display SCL / SPI SCK | GPIO4 |
-| Display SI / SPI MOSI | GPIO6 |
-| Display CS | GPIO15 |
-| Display RS / DC | GPIO16 |
-| Display RSE / RESET | GPIO17 |
+| Display pin 1 `CS` | GPIO15 |
+| Display pin 2 `RST` | GPIO17 |
+| Display pin 3 `RS (A0)` | GPIO16 |
+| Display pin 4 `SCL` / SPI SCK | GPIO4 |
+| Display pin 5 `SI` / SPI MOSI | GPIO6 |
+| Display pin 6 `VDD` | 3V3 |
+| Display pin 7 `GND` | GND |
+| Display pin 8 `LEDA` | 3V3 ou VCC do backlight |
+| Display pin 9 `LEDK` | GND |
+| Display pin 10 `IC_SCK` | nao usar |
+| Display pin 11 `IC_CS` | nao usar |
+| Display pin 12 `IC_SDO` | nao usar |
+| Display pin 13 `IC_SDI` | nao usar |
 | microSD CLK / SPI SCK | GPIO4 |
 | microSD MOSI | GPIO6 |
 | microSD MISO | GPIO5 |
 | microSD CS | GPIO7 |
 | Botao de pagina | GPIO10 para GND |
 
-Os pinos auxiliares `IC_SCL`, `IC_CS`, `IC_SO` e `IC_SI` do modulo grafico nao
-entram na comunicacao principal do firmware.
-
 Display e microSD agora compartilham o mesmo barramento SPI fisico. O display
-usa `SCK` e `MOSI` com `CS` proprio, enquanto o microSD usa os mesmos `SCK` e
+usa `SCL` e `SI` com `CS` proprio, enquanto o microSD usa os mesmos `SCK` e
 `MOSI`, mais `MISO` e seu proprio `CS`.
 
 Paginas do botao:
