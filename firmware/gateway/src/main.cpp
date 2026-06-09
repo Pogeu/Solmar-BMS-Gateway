@@ -52,6 +52,10 @@
 #define DISPLAY_CONTRAST -1
 #endif
 
+#ifndef DISPLAY_FILLED_PROGRESS_BAR
+#define DISPLAY_FILLED_PROGRESS_BAR 1
+#endif
+
 constexpr uint32_t DISPLAY_REFRESH_INTERVAL_MS = 500;
 constexpr uint32_t DISPLAY_BATTERY_STALE_AFTER_MS = 10000;
 constexpr uint8_t DISPLAY_PAGE_COUNT = 5;
@@ -150,9 +154,13 @@ static void drawProgressBar(uint8_t percent)
 
   display.drawFrame(DISPLAY_BAR_X, DISPLAY_BAR_Y, DISPLAY_BAR_WIDTH, DISPLAY_BAR_HEIGHT);
 
+#if DISPLAY_FILLED_PROGRESS_BAR
   if (fillWidth > 0) {
     display.drawBox(DISPLAY_BAR_X + 1, DISPLAY_BAR_Y + 1, fillWidth, DISPLAY_BAR_HEIGHT - 2);
   }
+#else
+  (void)fillWidth;
+#endif
 }
 
 static void showTextPage(const char *title,
@@ -343,6 +351,9 @@ static void setupDirectDisplay()
   display.setContrast(DISPLAY_CONTRAST);
 #endif
   setupPageButton();
+#if BMS_DISPLAY_STANDALONE_TEST
+  displayPage = 1;
+#endif
   showTextPage("BMS direto", "SPI", "Display 128x64", "ST7565 pronto", "Aguardando BMS", "");
 }
 
