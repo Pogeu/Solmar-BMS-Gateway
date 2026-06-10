@@ -60,10 +60,6 @@
 #define DISPLAY_USE_ERC12864_ALT 0
 #endif
 
-#ifndef DISPLAY_USE_ST7565R_MANUAL_INIT
-#define DISPLAY_USE_ST7565R_MANUAL_INIT 0
-#endif
-
 constexpr uint32_t DISPLAY_REFRESH_INTERVAL_MS = 500;
 constexpr uint32_t DISPLAY_BATTERY_STALE_AFTER_MS = 10000;
 constexpr uint8_t DISPLAY_PAGE_COUNT = 5;
@@ -332,51 +328,6 @@ static void forceDisplayRefresh()
   latestDisplayUpdateMs = 0;
 }
 
-static uint8_t st7565ElectronicVolume()
-{
-#if DISPLAY_CONTRAST < 0
-  return 13;
-#else
-  int volume = DISPLAY_CONTRAST / 4;
-
-  if (volume < 0) {
-    volume = 0;
-  } else if (volume > 63) {
-    volume = 63;
-  }
-
-  return (uint8_t)volume;
-#endif
-}
-
-static void applyManualSt7565rInit()
-{
-#if DISPLAY_USE_ST7565R_MANUAL_INIT
-  // Match the staged power-up that worked better on LCD12864/ST7565R modules.
-  pinMode(DISPLAY_RESET_PIN, OUTPUT);
-  digitalWrite(DISPLAY_RESET_PIN, LOW);
-  delay(200);
-  digitalWrite(DISPLAY_RESET_PIN, HIGH);
-  delay(100);
-
-  display.sendF("c", 0x0ae);                    // Display off
-  display.sendF("c", 0x0a3);                    // Bias 1/7
-  display.sendF("c", 0x0a0);                    // ADC normal
-  display.sendF("c", 0x0c0);                    // COM normal
-  display.sendF("c", 0x040);                    // Start line 0
-  display.sendF("c", 0x02c);                    // Booster on
-  delay(50);
-  display.sendF("c", 0x02e);                    // Regulator on
-  delay(50);
-  display.sendF("c", 0x02f);                    // Follower on
-  delay(10);
-  display.sendF("c", 0x026);                    // Resistor ratio
-  display.sendF("c", 0x0a4);                    // Normal display
-  display.sendF("ca", 0x081, st7565ElectronicVolume());
-  display.sendF("c", 0x0af);                    // Display on
-#endif
-}
-
 static void pollPageButton()
 {
   if (!pageButtonInterruptSeen) {
@@ -410,7 +361,6 @@ static void pollPageButton()
 static void setupDirectDisplay()
 {
   display.begin();
-  applyManualSt7565rInit();
 #if DISPLAY_CONTRAST >= 0
   display.setContrast(DISPLAY_CONTRAST);
 #endif
@@ -844,9 +794,6 @@ void setup()
   Serial.println("Display driver = ERC12864_ALT");
 #else
   Serial.println("Display driver = ERC12864");
-#endif
-#if DISPLAY_USE_ST7565R_MANUAL_INIT
-  Serial.println("Display init = manual ST7565R");
 #endif
 #if BMS_DISPLAY_STANDALONE_TEST
   Serial.println("Standalone display test: simulating BMS data.");
