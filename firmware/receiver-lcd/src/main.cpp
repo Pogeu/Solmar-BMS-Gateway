@@ -1,8 +1,6 @@
 #include <Arduino.h>
-#include <Wire.h>
-
-#define USE_SERIAL_1602_LCD
-#include <LCDBigNumbers.hpp>
+#include <SPI.h>
+#include <U8g2lib.h>
 
 #include <WiFi.h>
 #include <esp_now.h>
@@ -14,37 +12,42 @@
 #define ESP_NOW_WIFI_CHANNEL 1
 #endif
 
-#ifndef LCD_I2C_ADDR
-#define LCD_I2C_ADDR 0x27
+#ifndef DISPLAY_SPI_SCK_PIN
+#define DISPLAY_SPI_SCK_PIN 18
 #endif
 
-#ifndef LCD_COLUMNS
-#define LCD_COLUMNS 16
+#ifndef DISPLAY_SPI_MOSI_PIN
+#define DISPLAY_SPI_MOSI_PIN 23
 #endif
 
-#ifndef LCD_ROWS
-#define LCD_ROWS 2
+#ifndef DISPLAY_CS_PIN
+#define DISPLAY_CS_PIN 15
 #endif
 
-#ifndef LCD_SDA_PIN
-#define LCD_SDA_PIN 8
+#ifndef DISPLAY_DC_PIN
+#define DISPLAY_DC_PIN 16
 #endif
 
-#ifndef LCD_SCL_PIN
-#define LCD_SCL_PIN 9
+#ifndef DISPLAY_RESET_PIN
+#define DISPLAY_RESET_PIN 17
 #endif
 
-#ifndef LCD_PAGE_BUTTON_PIN
-#define LCD_PAGE_BUTTON_PIN 4
+#ifndef DISPLAY_PAGE_BUTTON_PIN
+#define DISPLAY_PAGE_BUTTON_PIN 4
 #endif
 
-#ifndef LCD_BUTTON_DEBOUNCE_MS
-#define LCD_BUTTON_DEBOUNCE_MS 80
+#ifndef DISPLAY_BUTTON_DEBOUNCE_MS
+#define DISPLAY_BUTTON_DEBOUNCE_MS 80
 #endif
 
 constexpr uint32_t DISPLAY_REFRESH_INTERVAL_MS = 500;
 constexpr uint32_t PACKET_STALE_AFTER_MS = 10000;
 constexpr uint8_t DISPLAY_PAGE_COUNT = 5;
+constexpr uint8_t DISPLAY_WIDTH = 128;
+constexpr uint8_t DISPLAY_BAR_X = 6;
+constexpr uint8_t DISPLAY_BAR_Y = 52;
+constexpr uint8_t DISPLAY_BAR_WIDTH = 116;
+constexpr uint8_t DISPLAY_BAR_HEIGHT = 8;
 
 #if defined(LCD_STANDALONE_TEST)
 constexpr uint32_t DEMO_PACKET_INTERVAL_MS = 1000;
@@ -53,23 +56,22 @@ constexpr uint32_t DEMO_PACKET_INTERVAL_MS = 1000;
 static_assert(sizeof(EspNowBatteryPacket) <= ESP_NOW_MAX_DATA_LEN,
               "ESP-NOW battery packet exceeds maximum payload size");
 
-LiquidCrystal_I2C lcd(LCD_I2C_ADDR, LCD_COLUMNS, LCD_ROWS);
-LCDBigNumbers bigNumberLCD(&lcd, BIG_NUMBERS_FONT_2_COLUMN_2_ROWS_VARIANT_1);
+U8G2_ST7565_ERC12864_F_4W_SW_SPI display(
+    U8G2_R0,
+    DISPLAY_SPI_SCK_PIN,
+    DISPLAY_SPI_MOSI_PIN,
+    DISPLAY_CS_PIN,
+    DISPLAY_DC_PIN,
+    DISPLAY_RESET_PIN);
 
 QueueHandle_t packetQueue;
 EspNowBatteryPacket latestPacket = {};
 uint32_t latestPacketAtMs = 0;
 uint32_t latestDisplayUpdateMs = 0;
-char displayedLines[LCD_ROWS][LCD_COLUMNS + 1] = {};
 uint8_t displayPage = 0;
 volatile bool pageButtonInterruptSeen = false;
 bool pageButtonStableState = HIGH;
 uint32_t pageButtonLastChangeMs = 0;
-bool mainPageRendered = false;
-char displayedMainSoc[4] = {};
-char displayedMainPower[5] = {};
-char displayedMainPowerUnit = '\0';
-bool displayedMainStale = false;
 
 #if defined(LCD_STANDALONE_TEST)
 uint32_t demoPacketUpdateMs = 0;
@@ -101,42 +103,68 @@ static void IRAM_ATTR onPageButtonInterrupt()
   pageButtonInterruptSeen = true;
 }
 
-static void clearDisplayedLines()
+static const char *powerUnitText(char unit)
 {
-  memset(displayedLines, 0, sizeof(displayedLines));
-  memset(displayedMainSoc, 0, sizeof(displayedMainSoc));
-  memset(displayedMainPower, 0, sizeof(displayedMainPower));
-  displayedMainPowerUnit = '\0';
-  displayedMainStale = false;
-  mainPageRendered = false;
+  return unit == 'k' ? "kW" : "W";
 }
 
-static void lcdPrintLine(uint8_t row, const char *text)
+static void formatPageStatus(char *text, size_t textSize, uint8_t pageIndex, bool stale)
 {
-  if (row >= LCD_ROWS) {
-    return;
-  }
-
-  char padded[LCD_COLUMNS + 1];
-  size_t len = strnlen(text, LCD_COLUMNS);
-
-  memset(padded, ' ', LCD_COLUMNS);
-  memcpy(padded, text, len);
-  padded[LCD_COLUMNS] = '\0';
-
-  if (strncmp(displayedLines[row], padded, LCD_COLUMNS) == 0) {
-    return;
-  }
-
-  lcd.setCursor(0, row);
-  lcd.print(padded);
-  memcpy(displayedLines[row], padded, LCD_COLUMNS + 1);
+  snprintf(text, textSize, stale ? "OLD %u/%u" : "%u/%u",
+           (unsigned)(pageIndex + 1),
+           (unsigned)DISPLAY_PAGE_COUNT);
 }
 
-static void lcdClear()
+static void drawHeader(const char *title, const char *status)
 {
-  lcd.clear();
-  clearDisplayedLines();
+  display.setFont(u8g2_font_6x10_tf);
+  display.drawStr(0, 8, title);
+
+  if (status != nullptr && status[0] != '\0') {
+    int16_t statusX = DISPLAY_WIDTH - (int16_t)display.getStrWidth(status);
+    display.drawStr(statusX > 0 ? statusX : 0, 8, status);
+  }
+
+  display.drawHLine(0, 10, DISPLAY_WIDTH);
+}
+
+static void drawProgressBar(uint8_t percent)
+{
+  uint8_t cappedPercent = percent > 100 ? 100 : percent;
+  uint8_t fillWidth = (uint8_t)(((DISPLAY_BAR_WIDTH - 2) * cappedPercent) / 100);
+
+  display.drawFrame(DISPLAY_BAR_X, DISPLAY_BAR_Y, DISPLAY_BAR_WIDTH, DISPLAY_BAR_HEIGHT);
+
+  if (fillWidth > 0) {
+    display.drawBox(DISPLAY_BAR_X + 1, DISPLAY_BAR_Y + 1, fillWidth, DISPLAY_BAR_HEIGHT - 2);
+  }
+}
+
+static void showTextPage(const char *title,
+                         const char *status,
+                         const char *line0,
+                         const char *line1,
+                         const char *line2,
+                         const char *line3)
+{
+  display.clearBuffer();
+  drawHeader(title, status);
+  display.setFont(u8g2_font_6x10_tf);
+
+  if (line0 != nullptr && line0[0] != '\0') {
+    display.drawStr(0, 22, line0);
+  }
+  if (line1 != nullptr && line1[0] != '\0') {
+    display.drawStr(0, 34, line1);
+  }
+  if (line2 != nullptr && line2[0] != '\0') {
+    display.drawStr(0, 46, line2);
+  }
+  if (line3 != nullptr && line3[0] != '\0') {
+    display.drawStr(0, 58, line3);
+  }
+
+  display.sendBuffer();
 }
 
 static const char *onOffText(bool enabled)
@@ -222,26 +250,16 @@ static char formatBigPower(float watts, char *text, size_t textSize)
   return 'W';
 }
 
-static void setupDisplayBus()
-{
-#if defined(ARDUINO_ARCH_ESP32)
-  Wire.setPins(LCD_SDA_PIN, LCD_SCL_PIN);
-#else
-  Wire.begin(LCD_SDA_PIN, LCD_SCL_PIN);
-#endif
-}
-
 static void setupPageButton()
 {
-  pinMode(LCD_PAGE_BUTTON_PIN, INPUT_PULLUP);
-  pageButtonStableState = digitalRead(LCD_PAGE_BUTTON_PIN);
-  attachInterrupt(digitalPinToInterrupt(LCD_PAGE_BUTTON_PIN), onPageButtonInterrupt, CHANGE);
+  pinMode(DISPLAY_PAGE_BUTTON_PIN, INPUT_PULLUP);
+  pageButtonStableState = digitalRead(DISPLAY_PAGE_BUTTON_PIN);
+  attachInterrupt(digitalPinToInterrupt(DISPLAY_PAGE_BUTTON_PIN), onPageButtonInterrupt, CHANGE);
 }
 
 static void forceDisplayRefresh()
 {
   latestDisplayUpdateMs = 0;
-  lcdClear();
 }
 
 static void pollPageButton()
@@ -254,10 +272,10 @@ static void pollPageButton()
   pageButtonInterruptSeen = false;
   interrupts();
 
-  bool reading = digitalRead(LCD_PAGE_BUTTON_PIN);
+  bool reading = digitalRead(DISPLAY_PAGE_BUTTON_PIN);
   uint32_t now = millis();
 
-  if (now - pageButtonLastChangeMs < LCD_BUTTON_DEBOUNCE_MS) {
+  if (now - pageButtonLastChangeMs < DISPLAY_BUTTON_DEBOUNCE_MS) {
     return;
   }
 
@@ -302,15 +320,12 @@ static void onEspNowRecv(const uint8_t *macAddr, const uint8_t *data, int len)
 
 static void showStartupScreen()
 {
-  lcdClear();
-  lcdPrintLine(0, "ESP-NOW BMS RX");
-  lcdPrintLine(1, "Aguardando...");
+  showTextPage("ESP-NOW RX", "SPI", "Display 128x64", "ST7565 pronto", "Aguardando dados", "");
 }
 
 static void showWaitingScreen()
 {
-  lcdPrintLine(0, "ESP-NOW BMS RX");
-  lcdPrintLine(1, "Sem dados");
+  showTextPage("ESP-NOW RX", "SPI", "Sem pacotes", "Confira canal", "Aguardando gateway", "");
 }
 
 #if defined(LCD_STANDALONE_TEST)
@@ -368,100 +383,113 @@ static void showMainPage(const EspNowBatteryPacket &packet, bool stale)
 {
   char socText[4];
   char powerText[5];
+  char footer[24];
+  char status[12];
   uint16_t socPercent = cappedSocPercent(packet.socPercent);
   char powerUnit = formatBigPower(packet.packPowerW, powerText, sizeof(powerText));
 
-  snprintf(socText, sizeof(socText), "%3u", socPercent);
+  snprintf(socText, sizeof(socText), "%u", socPercent);
+  snprintf(footer, sizeof(footer), "PWR %s %s", powerText, powerUnitText(powerUnit));
+  formatPageStatus(status, sizeof(status), 0, stale);
 
-  if (!mainPageRendered) {
-    lcdClear();
-  }
+  display.clearBuffer();
+  drawHeader("ESP-NOW RX", status);
 
-  if (mainPageRendered &&
-      strcmp(displayedMainSoc, socText) == 0 &&
-      strcmp(displayedMainPower, powerText) == 0 &&
-      displayedMainPowerUnit == powerUnit &&
-      displayedMainStale == stale) {
-    return;
-  }
+  display.setFont(u8g2_font_6x10_tf);
+  display.drawStr(0, 22, "SOC");
+  display.drawStr(72, 22, "PWR");
 
-  bigNumberLCD.begin();
-  bigNumberLCD.disableGapBetweenNumbers();
-  bigNumberLCD.setBigNumberCursor(0, 0);
-  bigNumberLCD.print(socText);
-  lcd.setCursor(6, 1);
-  lcd.print(stale ? '!' : '%');
+  display.setFont(u8g2_font_logisoso18_tn);
+  display.drawStr(0, 47, socText);
+  display.drawStr(68, 47, powerText);
 
-  bigNumberLCD.setBigNumberCursor(9, 0);
-  bigNumberLCD.print(powerText);
-  lcd.setCursor(15, 1);
-  lcd.print(powerUnit);
-
-  memcpy(displayedMainSoc, socText, sizeof(displayedMainSoc));
-  memcpy(displayedMainPower, powerText, sizeof(displayedMainPower));
-  displayedMainPowerUnit = powerUnit;
-  displayedMainStale = stale;
-  mainPageRendered = true;
+  display.setFont(u8g2_font_6x10_tf);
+  display.drawStr(44, 46, "%");
+  display.drawStr(110, 46, powerUnitText(powerUnit));
+  drawProgressBar((uint8_t)socPercent);
+  display.drawStr(0, 63, footer);
+  display.sendBuffer();
 }
 
 static void showElectricalPage(const EspNowBatteryPacket &packet)
 {
-  char line0[LCD_COLUMNS + 1];
-  char line1[LCD_COLUMNS + 1];
+  char line0[24];
+  char line1[24];
+  char line2[24];
+  char line3[24];
+  char status[12];
   uint16_t socPercent = cappedSocPercent(packet.socPercent);
 
-  snprintf(line0, sizeof(line0), "V%5.2f I%5.1f", packet.voltageV, packet.currentA);
-  snprintf(line1, sizeof(line1), "P%6ldW S%3u%%", displayWatts(packet.packPowerW), socPercent);
+  formatPageStatus(status, sizeof(status), 1, latestPacketAtMs != 0 && (millis() - latestPacketAtMs > PACKET_STALE_AFTER_MS));
+  snprintf(line0, sizeof(line0), "Volt  %5.2f V", packet.voltageV);
+  snprintf(line1, sizeof(line1), "Corr  %5.1f A", packet.currentA);
+  snprintf(line2, sizeof(line2), "Pot   %5ld W", displayWatts(packet.packPowerW));
+  snprintf(line3, sizeof(line3), "SOC   %3u %%", socPercent);
 
-  lcdPrintLine(0, line0);
-  lcdPrintLine(1, line1);
+  showTextPage("Eletrica", status, line0, line1, line2, line3);
 }
 
 static void showLifepo4SocPage(const EspNowBatteryPacket &packet)
 {
-  char line0[LCD_COLUMNS + 1];
-  char line1[LCD_COLUMNS + 1];
+  char line0[24];
+  char line1[24];
+  char line2[24];
+  char line3[24];
+  char status[12];
   uint8_t voltageSoc = lifepo4SocFromRestingVoltage(packet.voltageV);
   uint16_t bmsSoc = cappedSocPercent(packet.socPercent);
 
-  snprintf(line0, sizeof(line0), "BMS%3u%% Volt%3u%%", bmsSoc, voltageSoc);
-  snprintf(line1, sizeof(line1), "48V OCV %5.2f", packet.voltageV);
+  formatPageStatus(status, sizeof(status), 2, latestPacketAtMs != 0 && (millis() - latestPacketAtMs > PACKET_STALE_AFTER_MS));
+  snprintf(line0, sizeof(line0), "BMS SOC %3u %%", bmsSoc);
+  snprintf(line1, sizeof(line1), "VoltSOC %3u %%", voltageSoc);
+  snprintf(line2, sizeof(line2), "Pack    %5.2f V", packet.voltageV);
+  snprintf(line3, sizeof(line3), "OCV so em repouso");
 
-  lcdPrintLine(0, line0);
-  lcdPrintLine(1, line1);
+  showTextPage("SOC 48V", status, line0, line1, line2, line3);
 }
 
 static void showStatusPage(const EspNowBatteryPacket &packet)
 {
-  char line0[LCD_COLUMNS + 1];
-  char line1[LCD_COLUMNS + 1];
+  char line0[24];
+  char line1[24];
+  char line2[24];
+  char line3[24];
+  char status[12];
 
-  snprintf(line0, sizeof(line0), "B%u Temp %3uC", packet.deviceId, packet.temperatureC);
-  snprintf(line1, sizeof(line1), "C:%-3s D:%-3s",
-           onOffText(packet.statusFlags & ESP_NOW_BATTERY_STATUS_CHARGE_ENABLE),
+  formatPageStatus(status, sizeof(status), 3, latestPacketAtMs != 0 && (millis() - latestPacketAtMs > PACKET_STALE_AFTER_MS));
+  snprintf(line0, sizeof(line0), "BMS ID %u", packet.deviceId);
+  snprintf(line1, sizeof(line1), "Temp   %3u C", packet.temperatureC);
+  snprintf(line2, sizeof(line2), "Charge %s",
+           onOffText(packet.statusFlags & ESP_NOW_BATTERY_STATUS_CHARGE_ENABLE));
+  snprintf(line3, sizeof(line3), "Dischg %s",
            onOffText(packet.statusFlags & ESP_NOW_BATTERY_STATUS_DISCHARGE_ENABLE));
 
-  lcdPrintLine(0, line0);
-  lcdPrintLine(1, line1);
+  showTextPage("Status", status, line0, line1, line2, line3);
 }
 
 static void showFaultLinkPage(const EspNowBatteryPacket &packet, uint32_t ageMs, bool stale)
 {
-  char line0[LCD_COLUMNS + 1];
-  char line1[LCD_COLUMNS + 1];
+  char line0[24];
+  char line1[24];
+  char line2[24];
+  char line3[24];
+  char status[12];
+
+  formatPageStatus(status, sizeof(status), 4, stale);
 
   if (packet.faultFlags != 0) {
-    snprintf(line0, sizeof(line0), "FALHA 0x%04X", packet.faultFlags);
+    snprintf(line0, sizeof(line0), "Falha 0x%04X", packet.faultFlags);
   } else {
     snprintf(line0, sizeof(line0), "Sem falhas");
   }
 
-  snprintf(line1, sizeof(line1), "Link %s %3lus",
+  snprintf(line1, sizeof(line1), "Seq %lu", (unsigned long)packet.sequence);
+  snprintf(line2, sizeof(line2), "Tensao %5.2f V", packet.voltageV);
+  snprintf(line3, sizeof(line3), "Link %s %3lus",
            stale ? "OLD" : "OK ",
            (unsigned long)cappedAgeSeconds(ageMs));
 
-  lcdPrintLine(0, line0);
-  lcdPrintLine(1, line1);
+  showTextPage("Falhas", status, line0, line1, line2, line3);
 }
 
 static void showBatteryScreen(const EspNowBatteryPacket &packet, uint32_t ageMs)
@@ -525,29 +553,23 @@ void setup()
   Serial.begin(115200);
   delay(500);
 
-  setupDisplayBus();
+  display.begin();
   setupPageButton();
-  lcd.init();
-  lcd.backlight();
-  bigNumberLCD.begin();
-  bigNumberLCD.disableGapBetweenNumbers();
   showStartupScreen();
 
 #if defined(LCD_STANDALONE_TEST)
-  Serial.println("LCD standalone test mode");
-  lcdPrintLine(0, "LCD page test");
-  lcdPrintLine(1, "Botao troca pg");
+  Serial.println("Display standalone test mode");
+  showTextPage("Teste local", "SPI", "Paginas do display", "Botao troca pag", "Sem ESP-NOW", "");
 #else
   packetQueue = xQueueCreate(1, sizeof(EspNowBatteryPacket));
   if (packetQueue == nullptr) {
     Serial.println("Failed to create packet queue");
-    lcdPrintLine(1, "Erro fila");
+    showTextPage("ESP-NOW RX", "ERRO", "Falha na fila", "Ver Serial", "", "");
     return;
   }
 
   if (!startEspNow()) {
-    lcdPrintLine(0, "ESP-NOW erro");
-    lcdPrintLine(1, "Ver Serial");
+    showTextPage("ESP-NOW RX", "ERRO", "Falha ESP-NOW", "Ver Serial", "", "");
   }
 #endif
 }

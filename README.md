@@ -16,11 +16,12 @@ O repositório contém:
 
 - `firmware/gateway`: lê os dados do BMS Felicity/Felicity ESS via RS485 Modbus
   e atua como origem da telemetria.
-- `firmware/receiver-lcd`: mostra os principais valores em um LCD 16x2 I2C para
-  quem esta perto do barco. Nesta topologia ele recebe os dados por ESP-NOW.
+- `firmware/receiver-lcd`: mostra os principais valores em um display grafico
+  128x64 SPI para quem esta perto do barco. Nesta topologia ele recebe os dados
+  por ESP-NOW.
 - `dashboard`: página web para a equipe acompanhar a bateria a distancia por
   MQTT.
-- `shared`: formato comum do pacote ESP-NOW usado quando o LCD local fica em um
+- `shared`: formato comum do pacote ESP-NOW usado quando o display local fica em um
   segundo ESP32-S3.
 
 ## Visão geral
@@ -28,16 +29,16 @@ O repositório contém:
 O gateway fica conectado ao barramento RS485 da bateria e transforma as leituras
 do BMS em informação de uso:
 
-- LCD local: leitura rápida para operação e diagnóstico perto do barco.
+- Display local: leitura rápida para operação e diagnóstico perto do barco.
 - Dashboard remoto: visão para a equipe quando ela não esta no barco.
 - Log microSD: histórico simples em JSON Lines para análise posterior.
 - ESP-NOW: transporte local sem roteador quando o LCD esta em outra placa.
 - MQTT/WiFi: transporte atual para o dashboard remoto.
 
 O ambiente mais completo hoje é `esp32-s3-gateway-lcd-direct`: uma placa lê a
-BMS via RS485, atualiza o LCD local, grava no microSD e publica no MQTT. O
+BMS via RS485, atualiza o display local, grava no microSD e publica no MQTT. O
 ambiente `esp32-s3-gateway` continua disponível quando for melhor separar a
-placa que lê a BMS da placa que mostra o LCD.
+placa que lê a BMS da placa que mostra o display.
 
 Possíveis integrações futuras ficam listadas em [TODO.md](TODO.md), incluindo
 LoRa e troca do backend WiFi por GSM.
@@ -48,7 +49,7 @@ O gateway é a placa conectada ao barramento RS485 da bateria. Ele pode operar e
 duas topologias principais:
 
 - `esp32-s3-gateway`: lê a BMS e envia um pacote ESP-NOW para outro ESP32-S3.
-- `esp32-s3-gateway-lcd-direct`: lê a BMS, atualiza o LCD local, grava microSD e
+- `esp32-s3-gateway-lcd-direct`: lê a BMS, atualiza o display local, grava microSD e
   publica MQTT para o dashboard.
 
 Se o comando `pio` não estiver disponível no terminal, substitua `pio` pelo
@@ -108,16 +109,16 @@ O repositório tem um workflow para pull requests:
 - `.github/workflows/ci.yml`: compila o firmware do gateway, compila os testes
   PlatformIO e compila o receptor LCD.
 
-## LCD local
+## Display local
 
-O LCD local é a interface para quem esta perto do barco. Ele mostra SOC,
+O display local é a interface para quem esta perto do barco. Ele mostra SOC,
 potência, tensão, corrente, temperatura, status de carga/descarga, falhas e
 idade da última leitura.
 
-Existem duas formas de usar o LCD:
+Existem duas formas de usar o display:
 
-- LCD direto no gateway: usado pelo ambiente `esp32-s3-gateway-lcd-direct`.
-- LCD em uma segunda placa: usado pelo `firmware/receiver-lcd`, recebendo dados
+- Display direto no gateway: usado pelo ambiente `esp32-s3-gateway-lcd-direct`.
+- Display em uma segunda placa: usado pelo `firmware/receiver-lcd`, recebendo dados
   por ESP-NOW.
 
 Desconecte a placa do gateway ou use `--upload-port COMx` para evitar gravar o
@@ -149,9 +150,9 @@ Abrir o monitor serial do receptor LCD:
 pio device monitor -b 115200
 ```
 
-## ESP-NOW para LCD separado
+## ESP-NOW para display separado
 
-ESP-NOW é usado quando o LCD local fica em uma segunda placa ESP32-S3. Ele não
+ESP-NOW é usado quando o display local fica em uma segunda placa ESP32-S3. Ele não
 é a finalidade do projeto, mas uma forma prática de levar os dados do gateway
 até o display sem roteador, SSID, senha ou broker.
 
@@ -169,17 +170,17 @@ build_flags =
 	-D ESP_NOW_WIFI_CHANNEL=6
 ```
 
-Se o receptor LCD continuar mostrando `Sem dados`, confira primeiro:
+Se o receptor continuar mostrando `Sem dados`, confira primeiro:
 
 - o gateway está ligado e lendo a bateria
 - as duas placas usam o mesmo canal ESP-NOW
 - o receptor recebeu o firmware do receptor, não o firmware do gateway
-- o endereço I2C do LCD está correto (`0x27` e `0x3F` são comuns)
+- a pinagem SPI do display corresponde ao `platformio.ini`
 
-## Gateway LCD direto, microSD e MQTT
+## Gateway com display direto, microSD e MQTT
 
 O ambiente `esp32-s3-gateway-lcd-direct` usa uma única placa ESP32-S3 conectada
-ao RS485 da bateria e ao LCD I2C. Esse é o caminho principal para transformar a
+ao RS485 da bateria e ao display grafico SPI. Esse é o caminho principal para transformar a
 leitura da bateria em informação local e remota. Nesse modo o ESP-NOW fica
 desativado, e o firmware também grava cada leitura do BMS no microSD em JSON
 Lines:
@@ -193,6 +194,27 @@ Cada linha é um objeto JSON independente com o schema
 leituras têm tipos diferentes e arrays de células/temperaturas. O mesmo objeto
 JSON é usado como payload MQTT para o dashboard.
 
+Pinagem configurada para o display ST7565 / GMG12864-06D:
+
+| Pin # | Symbol | ESP32-S3 |
+|---|---|---|
+| `1` | `CS` | `GPIO15` |
+| `2` | `RST` | `GPIO17` |
+| `3` | `RS (A0)` | `GPIO16` |
+| `4` | `SCL` | `GPIO4` |
+| `5` | `SI` | `GPIO6` |
+| `6` | `VDD` | `3V3` |
+| `7` | `GND` | `GND` |
+| `8` | `LEDA` | `3V3` ou `VCC` do backlight |
+| `9` | `LEDK` | `GND` |
+| `10` | `IC_SCK` | `nao usar` |
+| `11` | `IC_CS` | `nao usar` |
+| `12` | `IC_SDO` | `nao usar` |
+| `13` | `IC_SDI` | `nao usar` |
+
+No firmware, a comunicacao principal do display fica somente em `CS`, `RST`,
+`RS (A0)`, `SCL` e `SI`.
+
 Pinagem configurada para o módulo microSD SPI:
 
 | microSD | ESP32-S3 |
@@ -204,14 +226,23 @@ Pinagem configurada para o módulo microSD SPI:
 | `CLK` | `GPIO4` |
 | `MISO` | `GPIO5` |
 
-O botão de páginas do LCD foi movido para `GPIO10` para deixar o microSD nos
-pinos SPI padrão definidos neste alvo ESP32-S3.
+No modo direto, display e microSD compartilham o mesmo barramento SPI fisico:
+`CLK/SCL` em `GPIO4` e `MOSI/SI` em `GPIO6`. Cada um fica com seu `CS`
+separado, e só o microSD usa `MISO` em `GPIO5`.
+
+O botão de páginas do display foi movido para `GPIO10` para deixar livre o
+barramento SPI compartilhado.
 
 Os pinos ficam em `firmware/gateway/platformio.ini`:
 
 ```ini
--D LCD_PAGE_BUTTON_PIN=10
--D SD_LOG_USE_DEFAULT_SPI_PINS=1
+-D DISPLAY_SPI_SCK_PIN=4
+-D DISPLAY_SPI_MOSI_PIN=6
+-D DISPLAY_CS_PIN=15
+-D DISPLAY_DC_PIN=16
+-D DISPLAY_RESET_PIN=17
+-D DISPLAY_PAGE_BUTTON_PIN=10
+-D SD_LOG_USE_DEFAULT_SPI_PINS=0
 -D SD_LOG_CS_PIN=7
 -D SD_LOG_SCK_PIN=4
 -D SD_LOG_MISO_PIN=5
@@ -232,7 +263,23 @@ pio run -e esp32-s3-gateway-lcd-direct -t upload
 ```
 
 Se o cartão não inicializar, o firmware continua lendo o BMS e atualizando o
-LCD; o erro aparece no monitor serial com prefixo `[SD]`.
+display; o erro aparece no monitor serial com prefixo `[SD]`.
+
+### Teste local das telas do display
+
+Sem ligar a bateria, voce pode subir um firmware de teste que injeta leituras
+falsas nas mesmas telas do modo direto. Esse ambiente nao usa RS485, microSD ou
+MQTT e serve para validar layout, troca de paginas e leitura visual do display:
+
+```sh
+cd firmware/gateway
+pio run -e esp32-s3-gateway-display-test
+pio run -e esp32-s3-gateway-display-test -t upload
+pio device monitor -b 9600
+```
+
+O botao em `GPIO10` continua trocando as paginas, e o monitor serial mostra os
+valores sinteticos enviados para o display.
 
 ### Dashboard remoto por MQTT
 

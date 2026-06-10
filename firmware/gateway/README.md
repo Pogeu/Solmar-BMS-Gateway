@@ -5,9 +5,9 @@ dados em informação para o usuário local e para a equipe remota.
 
 Este projeto tem dois ambientes principais neste diretório:
 
-- `esp32-s3-gateway`: lê a BMS e transmite um resumo por ESP-NOW para um LCD em
+- `esp32-s3-gateway`: lê a BMS e transmite um resumo por ESP-NOW para um display em
   outra placa ESP32-S3.
-- `esp32-s3-gateway-lcd-direct`: lê a BMS, atualiza um LCD conectado na mesma
+- `esp32-s3-gateway-lcd-direct`: lê a BMS, atualiza um display conectado na mesma
   placa, grava JSON Lines no microSD e publica MQTT para o dashboard.
 
 ESP-NOW é uma opção de transporte local para separar a placa do gateway da
@@ -40,11 +40,11 @@ Abrir o monitor serial:
 pio device monitor -b 9600
 ```
 
-## Modo direto RS485 -> LCD 16x2 -> MQTT
+## Modo direto RS485 -> display 128x64 SPI -> MQTT
 
 O ambiente `esp32-s3-gateway-lcd-direct` le a bateria Felicity/Felicity ESS pelo
 mesmo barramento RS485 do gateway, mas nao usa ESP-NOW. Os dados sao escritos
-direto no LCD I2C 16x2, gravados no microSD e publicados em MQTT para o
+direto no display grafico ST7565 128x64, gravados no microSD e publicados em MQTT para o
 dashboard remoto.
 
 Compilar:
@@ -72,22 +72,65 @@ Ligacoes padrao do ESP32-S3 neste alvo:
 | RS485 RO / RX | GPIO0 |
 | RS485 DI / TX | GPIO2 |
 | RS485 DE + RE | GPIO1 |
-| LCD SDA | GPIO8 |
-| LCD SCL | GPIO9 |
-| Botao de pagina | GPIO4 para GND |
+| Display pin 1 `CS` | GPIO15 |
+| Display pin 2 `RST` | GPIO17 |
+| Display pin 3 `RS (A0)` | GPIO16 |
+| Display pin 4 `SCL` / SPI SCK | GPIO4 |
+| Display pin 5 `SI` / SPI MOSI | GPIO6 |
+| Display pin 6 `VDD` | 3V3 |
+| Display pin 7 `GND` | GND |
+| Display pin 8 `LEDA` | 3V3 ou VCC do backlight |
+| Display pin 9 `LEDK` | GND |
+| Display pin 10 `IC_SCK` | nao usar |
+| Display pin 11 `IC_CS` | nao usar |
+| Display pin 12 `IC_SDO` | nao usar |
+| Display pin 13 `IC_SDI` | nao usar |
+| microSD CLK / SPI SCK | GPIO4 |
+| microSD MOSI | GPIO6 |
+| microSD MISO | GPIO5 |
+| microSD CS | GPIO7 |
+| Botao de pagina | GPIO10 para GND |
 
-O LCD usa endereco I2C `0x27` por padrao. Se o seu modulo estiver em outro
-endereco, ajuste `LCD_I2C_ADDR` no `platformio.ini`.
+Display e microSD agora compartilham o mesmo barramento SPI fisico. O display
+usa `SCL` e `SI` com `CS` proprio, enquanto o microSD usa os mesmos `SCK` e
+`MOSI`, mais `MISO` e seu proprio `CS`.
 
 Paginas do botao:
 
 | Pagina | Conteudo |
 | --- | --- |
-| 0 | SOC e potencia em numeros grandes |
+| 0 | SOC e potencia com destaque + barra de progresso |
 | 1 | Tensao, corrente, potencia e SOC |
 | 2 | Comparacao SOC BMS x estimativa LiFePO4 por tensao |
 | 3 | Temperatura e status de carga/descarga |
 | 4 | Falhas, min/max das celulas e idade do ultimo pacote |
+
+## Teste local das telas
+
+Existe um ambiente separado para testar o display sem bateria ligada. Ele
+simula mensagens `BmsMessage` com variacao de tensao, corrente, SOC,
+temperatura e falhas para exercitar as cinco paginas do display.
+
+Compilar:
+
+```sh
+pio run -e esp32-s3-gateway-display-test
+```
+
+Fazer upload:
+
+```sh
+pio run -e esp32-s3-gateway-display-test -t upload
+```
+
+Abrir o monitor serial:
+
+```sh
+pio device monitor -b 9600
+```
+
+Nesse modo o firmware nao inicia RS485, microSD nem MQTT. O botao de pagina em
+`GPIO10` continua ativo e o monitor serial imprime os valores simulados.
 
 Compilar o teste unitário do pacote:
 

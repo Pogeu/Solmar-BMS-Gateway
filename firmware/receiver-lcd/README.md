@@ -1,30 +1,41 @@
-# LCD local via ESP-NOW
+# Display local via ESP-NOW
 
-Firmware para usar o LCD local em um segundo ESP32-S3. Ele recebe o broadcast de
+Firmware para usar o display local em um segundo ESP32-S3. Ele recebe o broadcast de
 bateria enviado pelo gateway via ESP-NOW e mostra os principais valores em um
-LCD 16x2 I2C para quem esta perto do barco.
+display grafico 128x64 SPI para quem esta perto do barco.
 
-Esta é uma das topologias possíveis do projeto. Quando o LCD fica conectado na
+Esta é uma das topologias possíveis do projeto. Quando o display fica conectado na
 mesma placa que lê o RS485, use o ambiente `esp32-s3-gateway-lcd-direct`.
 
 Ligação padrão:
 
-- LCD VCC -> 5V ou 3V3, conforme o backpack do LCD
-- LCD GND -> GND
-- LCD SDA -> GPIO8
-- LCD SCL -> GPIO9
-- Botão de página -> GPIO4 e GND
+| Pin # | Symbol | ESP32-S3 |
+| --- | --- | --- |
+| `1` | `CS` | `GPIO15` |
+| `2` | `RST` | `GPIO17` |
+| `3` | `RS (A0)` | `GPIO16` |
+| `4` | `SCL` | `GPIO18` |
+| `5` | `SI` | `GPIO23` |
+| `6` | `VDD` | `3V3` ou `5V`, conforme o módulo |
+| `7` | `GND` | `GND` |
+| `8` | `LEDA` | `VCC` do backlight |
+| `9` | `LEDK` | `GND` |
+| `10` | `IC_SCK` | `nao usar` |
+| `11` | `IC_CS` | `nao usar` |
+| `12` | `IC_SDO` | `nao usar` |
+| `13` | `IC_SDI` | `nao usar` |
+
+Botão de página: `GPIO4` e `GND`.
 
 Configurações padrão em `platformio.ini`:
 
 - Canal ESP-NOW: `1`
-- Endereço I2C do LCD: `0x27`
-- Tamanho do LCD: `16x2`
+- Display: `ST7565` 128x64 SPI
 - Botão de troca de página: `GPIO4` com pull-up interno
 
-Leitura do LCD:
+Leitura do display:
 
-- Página 1: SOC e potência em números grandes com `LCDBigNumbers`.
+- Página 1: SOC e potência com destaque e barra de progresso.
 - Página 2: tensão, corrente, potência e SOC.
 - Página 3: comparação entre SOC do BMS e SOC estimado pela tabela LiFePO4
   48V da Jackery. Essa estimativa por tensão só é confiável com bateria em
@@ -32,16 +43,16 @@ Leitura do LCD:
 - Página 4: temperatura e estado de carga/descarga.
 - Página 5: falhas e idade da última leitura.
 - Se nenhum pacote novo chegar por mais de 10 segundos, a linha 2 mostra
-  `Link OLD` na página 5, e a página principal marca `!`.
+  `Link OLD` na página 5, e o cabeçalho mostra o status antigo.
 - O botão de página deve ligar `GPIO4` ao `GND`; o firmware usa `INPUT_PULLUP`,
   interrupção por mudança de estado e debounce não bloqueante no estilo da
   `EasyButtonAtInt01`.
-- O LCD usa `Wire.setPins()` no ESP32-S3 para manter SDA/SCL configuráveis. A
-  `SoftI2CMaster` é suportada pelo adapter da `LCDBigNumbers` em AVR, mas não é
-  ativada neste alvo ESP32-S3.
+- Os pinos `IC_SCK`, `IC_CS`, `IC_SDO` e `IC_SDI` da placa do display não são
+  usados na comunicação principal.
 
-Se o LCD acender mas não mostrar texto, tente trocar `LCD_I2C_ADDR` para
-`0x3F`. O canal ESP-NOW precisa ser igual ao `ESP_NOW_WIFI_CHANNEL` do firmware
+Se o display acender mas não mostrar texto, revise primeiro a pinagem `SCL`,
+`SI`, `CS`, `RS (A0)` e `RST` e, se necessário, teste outra variante ST7565 da
+biblioteca U8g2. O canal ESP-NOW precisa ser igual ao `ESP_NOW_WIFI_CHANNEL` do firmware
 transmissor. O formato binário do pacote é compartilhado por
 `../../shared/espnow_battery_packet.h`.
 
